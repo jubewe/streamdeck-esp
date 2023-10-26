@@ -4,9 +4,22 @@
 
 #define DEVICE_NAME "Streamdeck"
 
-#define INTPinA 12
-#define INTPinB 13
-#define ledPin 23
+#define INTPin 13
+#define ledPin 2
+
+int encoder1PinA = 15;
+int encoder1PinB = 14;
+
+int encoder2PinA = 26;
+int encoder2PinB = 17;
+
+int encoder1Pos = 0;
+int encoder1PinALast = LOW;
+int encoder1PinANow = LOW;
+
+int encoder2Pos = 0;
+int encoder2PinALast = LOW;
+int encoder2PinANow = LOW;
 
 #define numSwitches 15
 
@@ -28,11 +41,15 @@ Adafruit_MCP23X17 mcp;
 #define SERVICE_UUID "34b4daf9-ff80-4e58-a497-40d349f78692"
 
 #define KEY_PRESS_CHARACTERISTIC_UUID "2d15f60d-56c6-47e4-8af6-e9d67077c09c"
+#define ENCODER1_CHARACTERISTIC_UUID "101a1ee2-5b79-4b2f-b53d-cee26dff68d8"
+#define ENCODER2_CHARACTERISTIC_UUID "b7c0ca66-4dac-4c06-82ba-05d38cec1fa4"
 #define CONFIG_CHARACTERISTIC_UUID "006f82e3-fafa-44d9-82ac-add23151a870"
 
 static NimBLEServer *pServer;
 static NimBLEService *pService;
 static NimBLECharacteristic *keyPressCharacteristic;
+static NimBLECharacteristic *encoder1Characteristic;
+static NimBLECharacteristic *encoder2Characteristic;
 static NimBLECharacteristic *configCharacteristic;
 static NimBLEAdvertising *pAdvertising;
 
@@ -117,24 +134,6 @@ void statLED(bool state)
   }
 }
 
-void sendKeys()
-{
-  String pressedKeys = "";
-  for (int i = 0; i < sizeof(switchStates) / sizeof(switchStates[0]); i++)
-  {
-    if (switchStates[i])
-    {
-      // If the value is true, append the index to the string
-      if (pressedKeys != "")
-      {
-        pressedKeys += ",";
-      }
-      pressedKeys += String(i);
-    }
-  }
-  writeCharacteristic(keyPressCharacteristic, pressedKeys);
-}
-
 void setup()
 {
   Serial.begin(115200);
@@ -146,18 +145,26 @@ void setup()
   pService = pServer->createService(SERVICE_UUID);
   keyPressCharacteristic = pService->createCharacteristic(KEY_PRESS_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   configCharacteristic = pService->createCharacteristic(CONFIG_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE);
+  encoder1Characteristic = pService->createCharacteristic(ENCODER1_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  encoder2Characteristic = pService->createCharacteristic(ENCODER2_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   keyPressCharacteristic->setCallbacks(&characteristicsCallback);
+  encoder1Characteristic->setCallbacks(&characteristicsCallback);
+  encoder2Characteristic->setCallbacks(&characteristicsCallback);
   configCharacteristic->setCallbacks(&characteristicsCallback);
   pService->start();
   pAdvertising = NimBLEDevice::getAdvertising();
   pAdvertising->setScanResponse(false);
   pAdvertising->start();
 
-  pinMode(INTPinA, INPUT);
-  pinMode(INTPinB, INPUT);
+  pinMode(encoder1PinA, INPUT_PULLUP);
+  pinMode(encoder1PinB, INPUT_PULLUP);
+  pinMode(encoder2PinA, INPUT_PULLUP);
+  pinMode(encoder2PinB, INPUT_PULLUP);
+  pinMode(INTPin, INPUT);
   pinMode(ledPin, OUTPUT);
   ledcSetup(0, 5000, 8);
   ledcAttachPin(ledPin, 0);
+  delay(5000);
 
   if (!mcp.begin_I2C())
   {
@@ -165,9 +172,11 @@ void setup()
     while (1)
       ;
   }
+  Serial.println("Connected to expander!");
+
   mcp.setupInterrupts(true, false, LOW);
 
-  for (int ID = 0; ID < numSwitches - 1; ID++)
+  for (int ID = 0; ID < 16; ID++)
   {
     mcp.pinMode(ID, INPUT_PULLUP);
     mcp.setupInterruptPin(ID, CHANGE);
@@ -180,22 +189,51 @@ void loop()
 {
   if (deviceConnected)
   {
-    if (digitalRead(INTPinA) == LOW)
+    if (digitalRead(INTPin) == LOW)
     {
       int ID = mcp.getLastInterruptPin();
       bool state = mcp.digitalRead(ID);
       Serial.print("Switch changed: " + String(ID) + " ");
-      Serial.println("New state: " + String());
+      Serial.println("New state: " + String(state));
       switchStates[ID] = !state;
-      sendKeys();
-      delay(interval);
+      writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
       mcp.clearInterrupts();
     }
+    encoder1PinANow = digitalRead(encoder1PinA);
+    if ((encoder1PinALast == HIGH) && (encoder1PinANow == LOW))
+    {
+      if (digitalRead(encoder1PinB) == HIGH)
+      {
+        encoder1Pos++;
+      }
+      else
+      {
+        encoder1Pos--;
+      }
+      Serial.println(encoder1Pos);
+      writeCharacteristic(encoder1Characteristic, String(encoder1Pos));
+    }
+    encoder1PinALast = encoder1PinANow;
+    encoder2PinANow = digitalRead(encoder2PinA);
+    if ((encoder2PinALast == HIGH) && (encoder2PinANow == LOW))
+    {
+      if (digitalRead(encoder2PinB) == HIGH)
+      {
+        encoder2Pos++;
+      }
+      else
+      {
+        encoder2Pos--;
+      }
+      Serial.println(encoder2Pos);
+      writeCharacteristic(encoder2Characteristic, String(encoder2Pos));
+    }
+    encoder2PinALast = encoder2PinANow;
+
     if ((millis() - lastMillisLED) > ledFreqConnected)
     {
       ledState = !ledState;
       statLED(ledState);
-      writeCharacteristic(keyPressCharacteristic, String(ledState));
       lastMillisLED = millis();
     }
   }
