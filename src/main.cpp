@@ -7,11 +7,13 @@
 #define INTPin 13
 #define ledPin 2
 
-int encoder1PinA = 15;
-int encoder1PinB = 14;
+const int encoder1PinA = 15;
+const int encoder1PinB = 14;
+const int encoder1PinSwitch = 33;
 
-int encoder2PinA = 26;
-int encoder2PinB = 17;
+const int encoder2PinA = 26;
+const int encoder2PinB = 17;
+const int encoder2PinSwitch = 32;
 
 int encoder1Pos = 0;
 int encoder1PinALast = LOW;
@@ -20,6 +22,11 @@ int encoder1PinANow = LOW;
 int encoder2Pos = 0;
 int encoder2PinALast = LOW;
 int encoder2PinANow = LOW;
+
+bool encoder1Switch = LOW;
+bool encoder1SwitchLast = LOW;
+bool encoder2Switch = LOW;
+bool encoder2SwitchLast = LOW;
 
 #define numSwitches 15
 
@@ -35,6 +42,24 @@ const int ledFreqConnected = 100;
 const int ledDim = 50;
 
 bool ledState;
+
+int lastState[numSwitches];
+
+int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6};
+
+const int encoder1Id = -1;
+const int encoder2Id = -2;
+
+int getButtonIdFormPin(int buttonId)
+{
+  for (int i = 0; i <= numSwitches; ++i)
+  {
+    if (buttonMap[i] == buttonId)
+    {
+      return i; // return i+1;
+    }
+  }
+}
 
 Adafruit_MCP23X17 mcp;
 
@@ -158,8 +183,10 @@ void setup()
 
   pinMode(encoder1PinA, INPUT_PULLUP);
   pinMode(encoder1PinB, INPUT_PULLUP);
+  pinMode(encoder1PinSwitch, INPUT_PULLUP);
   pinMode(encoder2PinA, INPUT_PULLUP);
   pinMode(encoder2PinB, INPUT_PULLUP);
+  pinMode(encoder2PinSwitch, INPUT_PULLUP);
   pinMode(INTPin, INPUT);
   pinMode(ledPin, OUTPUT);
   ledcSetup(0, 5000, 8);
@@ -168,11 +195,11 @@ void setup()
 
   if (!mcp.begin_I2C())
   {
-    Serial.println("Error connecting io expander");
+    Serial.println("error while connecting to io expander");
     while (1)
       ;
   }
-  Serial.println("Connected to expander!");
+  Serial.println("connected to expander");
 
   mcp.setupInterrupts(true, false, LOW);
 
@@ -191,14 +218,36 @@ void loop()
   {
     if (digitalRead(INTPin) == LOW)
     {
-      int ID = mcp.getLastInterruptPin();
-      bool state = mcp.digitalRead(ID);
+      int ID = getButtonIdFormPin(mcp.getLastInterruptPin());
+//      bool state = mcp.digitalRead(ID);
+
+      bool state = !lastState[ID];
+
+      lastState[ID] = state;
+
       Serial.print("Switch changed: " + String(ID) + " ");
       Serial.println("New state: " + String(state));
       switchStates[ID] = !state;
       writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
       mcp.clearInterrupts();
     }
+    encoder1Switch = !digitalRead(encoder1PinSwitch);
+    encoder2Switch = !digitalRead(encoder2PinSwitch);
+    if (encoder1Switch != encoder1SwitchLast)
+    {
+      Serial.print("Encoder changed: " + String(-encoder1Id) + " ");
+      Serial.println("New state: " + String(encoder1Switch));
+      writeCharacteristic(keyPressCharacteristic, String(String(encoder1Id) + ";" + String(encoder1Switch)));
+      encoder1SwitchLast = encoder1Switch;
+    }
+    if (encoder2Switch != encoder2SwitchLast)
+    {
+      Serial.print("Encoder changed: " + String(-encoder2Id) + " ");
+      Serial.println("New state: " + String(encoder2Switch));
+      writeCharacteristic(keyPressCharacteristic, String(String(encoder2Id) + ";" + String(encoder2Switch)));
+      encoder2SwitchLast = encoder2Switch;
+    }
+
     encoder1PinANow = digitalRead(encoder1PinA);
     if ((encoder1PinALast == HIGH) && (encoder1PinANow == LOW))
     {
@@ -245,5 +294,6 @@ void loop()
       statLED(ledState);
       lastMillisLED = millis();
     }
+    mcp.clearInterrupts();
   }
 }
