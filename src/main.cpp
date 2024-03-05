@@ -4,7 +4,7 @@
 #include <TFT_eSPI.h>
 #include <Adafruit_MAX1704X.h>
 #include <BleKeyboard.h>
-
+#include <Preferences.h>
 
 #define DEVICE_NAME "Streamdeck"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
@@ -12,6 +12,7 @@
 
 Adafruit_MAX17048 lipo;
 BleKeyboard bleKeyboard;
+Preferences preferences;
 
 #define INTPin 13
 #define ledPin 2
@@ -114,7 +115,7 @@ class ServerCallbacks : public NimBLEServerCallbacks
   {
     deviceConnected = true;
     Serial.print("Client address: ");
-    //NimBLEDevice::stopAdvertising();
+    // NimBLEDevice::stopAdvertising();
     NimBLEDevice::startAdvertising();
 
     // pServer->updateConnParams(desc->conn_handle, 24, 48, 0, 60);
@@ -149,8 +150,20 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
     Serial.println(pCharacteristic->getValue().c_str());
     if (pUUID == CONFIG_CHARACTERISTIC_UUID)
     {
-      Serial.print("new config: ");
-      Serial.println(pValue);
+
+      // pattern: "c,{id},{value}"
+      if (pValue[0] == 'c')
+      {
+        int divider1 = pValue.indexOf(",");
+        int divider2 = pValue.indexOf(",", divider1 + 1);
+        String id = pValue.substring(divider1 + 1, divider2);
+        String value = pValue.substring(divider2 + 1, pValue.length());
+        preferences.putString(id.c_str(), value);
+        Serial.print("new config: ");
+        Serial.println(pValue);
+        Serial.println(id);
+        Serial.println(value);
+      }
     }
   };
 };
@@ -158,17 +171,15 @@ static CharacteristicsCallback characteristicsCallback;
 
 class DescriptorCallbacks : public NimBLEDescriptorCallbacks
 {
-  void onWrite(NimBLEDescriptor *pDescriptor)
-  {
-    //std::string dscVal = pDescriptor->getValue();
-    //Serial.print("Descriptor witten value:");
-    //Serial.println(dscVal.c_str());
+  void onWrite(NimBLEDescriptor *pDescriptor){
+      // std::string dscVal = pDescriptor->getValue();
+      // Serial.print("Descriptor witten value:");
+      // Serial.println(dscVal.c_str());
   };
 
-  void onRead(NimBLEDescriptor *pDescriptor)
-  {
-    //Serial.print(pDescriptor->getUUID().toString().c_str());
-    //Serial.println(" Descriptor read");
+  void onRead(NimBLEDescriptor *pDescriptor){
+      // Serial.print(pDescriptor->getUUID().toString().c_str());
+      // Serial.println(" Descriptor read");
   };
 };
 static DescriptorCallbacks dscCallbacks;
@@ -186,45 +197,74 @@ void statLED(bool state)
   }
 }
 
-void drawBackground(){
-    tft.drawCentreString(DEVICE_NAME,(DISPLAY_WIDTH-40)/2,15,2);
-    tft.drawCentreString(DEVICE_FIRMWARE,(DISPLAY_WIDTH-40)/2,33,1);
-    
-    if(deviceConnected){
-      tft.drawCentreString("  connected  ",(DISPLAY_WIDTH-40)/2,65,1);
-      tft.drawRoundRect(0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,10,TFT_SKYBLUE);
-    }else{
-      tft.drawCentreString("disconnected",(DISPLAY_WIDTH-40)/2,65,1);
-      tft.drawRoundRect(0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,10,TFT_DARKGREY);
-    }
-    if(config){
-      tft.drawCentreString("(configuration)",(DISPLAY_WIDTH-40)/2,50,1);
-      tft.drawRoundRect(0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,10,TFT_GREEN);
-    }else{
-      tft.drawCentreString("               ",(DISPLAY_WIDTH-40)/2,50,1);
-    }
+void drawBackground()
+{
+  tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 2, TFT_BLACK);
+  tft.drawCentreString(DEVICE_NAME, (DISPLAY_WIDTH - 45-10) / 2, 10, 2);
+  tft.drawCentreString(DEVICE_FIRMWARE, (DISPLAY_WIDTH - 45-10) / 2, 33-5, 1);
+
+  if (deviceConnected)
+  {
+    tft.drawCentreString("  connected  ", (DISPLAY_WIDTH - 45-10) / 2, 65, 1);
+    tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_SKYBLUE);
+  }
+  else
+  {
+    tft.drawCentreString("disconnected", (DISPLAY_WIDTH - 45-10) / 2, 65, 1);
+    tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_DARKGREY);
+  }
+  if (config)
+  {
+    tft.drawCentreString("(configuration)", (DISPLAY_WIDTH - 45-10) / 2, 50, 1);
+    tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_GREEN);
+  }
+  else 
+  {
+    tft.drawCentreString("               ", (DISPLAY_WIDTH - 45-10) / 2, 50, 1);
+  }
 }
 
-void drawBattery (int batteryPercent){
+int page = 0;
+int pageOld = 0;
+
+void drawPage()
+{
+  tft.drawCentreString(String(page + 1), DISPLAY_WIDTH - 47-3, DISPLAY_HEIGHT / 2 - 10, 4);
+  tft.drawCircle(DISPLAY_WIDTH - 48-3, DISPLAY_HEIGHT / 2, 14, TFT_LIGHTGREY);
+}
+
+void drawKeyString(char key, int id)
+{
+  tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 4, TFT_BLACK);
+  String value = preferences.getString(String(key).c_str(), "---");
+  tft.drawCentreString("key " + String(id) + " / page "+String(page+1)+":", (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 30, 2);
+
+  tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 10, 2);
+}
+
+void drawBattery(int batteryPercent)
+{
   int color = TFT_GREEN;
-  if(batteryPercent <= 30){
+  if (batteryPercent <= 30)
+  {
     color = TFT_RED;
-  }else if(batteryPercent <= 45){
+  }
+  else if (batteryPercent <= 45)
+  {
     color = TFT_ORANGE;
   }
   img.setColorDepth(8);
-  img.createSprite(38, DISPLAY_HEIGHT-3);
+  img.createSprite(38, DISPLAY_HEIGHT - 3);
   img.fillSprite(TFT_TRANSPARENT);
-  img.drawRoundRect(40-20-8,17,20,45,3,TFT_WHITE);
-  img.fillRect(40-15-8,14,10,3,TFT_WHITE);
-  img.fillRoundRect(40-15-8,12,10,5,2,TFT_WHITE);
-  img.fillRoundRect(40-19-8,17+1,18,constrain(45-(map(batteryPercent, 0, 100, 5, 45)),3,45),2,TFT_BLACK);
-  img.fillRoundRect(40-19-8,constrain(17+45-(map(batteryPercent, 0, 100, 5, 45))+1,18,68),18,constrain((map(batteryPercent, 0, 100, 5, 45))-2,0,48)      ,2,color);
-  img.fillRect(40-25-8,63,30,30,TFT_BLACK);
-  img.drawCentreString(String(constrain(batteryPercent, 0, 99))+"%",40-10-8,63,2);
-  img.pushSprite(DISPLAY_WIDTH-41, -3, TFT_TRANSPARENT);
+  img.drawRoundRect(40 - 20 - 8, 17, 20, 45, 3, TFT_WHITE);
+  img.fillRect(40 - 15 - 8, 14, 10, 3, TFT_WHITE);
+  img.fillRoundRect(40 - 15 - 8, 12, 10, 5, 2, TFT_WHITE);
+  img.fillRoundRect(40 - 19 - 8, 17 + 1, 18, constrain(45 - (map(batteryPercent, 0, 100, 5, 45)), 3, 45), 2, TFT_BLACK);
+  img.fillRoundRect(40 - 19 - 8, constrain(17 + 45 - (map(batteryPercent, 0, 100, 5, 45)) + 1, 18, 68), 18, constrain((map(batteryPercent, 0, 100, 5, 45)) - 2, 0, 48), 2, color);
+  img.fillRect(40 - 25 - 8, 63, 30, 30, TFT_BLACK);
+  img.drawCentreString(String(constrain(batteryPercent, 0, 99)) + "%", 40 - 10 - 8, 63, 2);
+  img.pushSprite(DISPLAY_WIDTH - 41, -3, TFT_TRANSPARENT);
   img.deleteSprite();
-
 }
 
 void setup()
@@ -242,7 +282,8 @@ void setup()
   ledcSetup(0, 5000, 8);
   ledcAttachPin(ledPin, 0);
   config = !digitalRead(encoder2PinSwitch);
-  if(config){
+  if (config)
+  {
     NimBLEDevice::init(DEVICE_NAME_CONFIG);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
     pServer = NimBLEDevice::createServer();
@@ -261,17 +302,18 @@ void setup()
     pAdvertising->setScanResponse(false);
     pAdvertising->start();
   }
-  else{
+  else
+  {
     bleKeyboard.setName(DEVICE_NAME);
     bleKeyboard.begin();
   }
 
+  preferences.begin("prefs");
+
   tft.init();
   tft.setRotation(3);
-  digitalWrite(tftBLPin, HIGH);
   tft.fillScreen(TFT_BLACK);
-  
-  delay(1200);
+  digitalWrite(tftBLPin, HIGH);
 
   if (!mcp.begin_I2C())
   {
@@ -280,9 +322,12 @@ void setup()
       ;
   }
   Serial.println("connected to expander");
-  if (!lipo.begin()) {
+  if (!lipo.begin())
+  {
     Serial.println("error while connecting to MAX17048");
-  }else{
+  }
+  else
+  {
     Serial.println("connected to MAX17048");
   }
   mcp.setupInterrupts(true, false, LOW);
@@ -296,9 +341,10 @@ void setup()
   memset(switchStates, false, sizeof(switchStates));
 }
 
-int readBattery(){
+int readBattery()
+{
   int percent = constrain(int(lipo.cellPercent()), 0, 99);
-  Serial.println("battery percent: "+String(percent));
+  Serial.println("battery percent: " + String(percent));
   bleKeyboard.setBatteryLevel(percent);
   return percent;
 }
@@ -306,98 +352,168 @@ int readBattery(){
 int i = 0;
 unsigned long lastMillisBatteryRead;
 int batteryReadFreq = 1000;
+
+bool showKeyString = false;
+bool showKeyStringOld = false;
+
 void loop()
 {
-  if(!config){
-    deviceConnected = bleKeyboard.isConnected();
+
+  showKeyString = !digitalRead(encoder2PinSwitch);
+
+  if (showKeyString && !showKeyStringOld)
+  {
+    Serial.println("showKeyString press");
+    showKeyStringOld = showKeyString;
   }
-  if(batteryPercent != batteryPercentOld){
+  if (!showKeyString && showKeyStringOld)
+  {
+    Serial.println("showKeyString release");
+    showKeyStringOld = showKeyString;
+    refreshScreen = true;
+  }
+
+  if (page != pageOld)
+  {
+    drawPage();
+    pageOld = page;
+  }
+
+  if (!config)
+  {
+    bool keyboardConnected = bleKeyboard.isConnected();
+    if (deviceConnected != keyboardConnected)
+    {
+      deviceConnected = keyboardConnected;
+      refreshScreen = true;
+    }
+  }
+  if (batteryPercent != batteryPercentOld)
+  {
     drawBattery(batteryPercent);
     batteryPercentOld = batteryPercent;
   }
-  if(refreshScreen){
+  if (refreshScreen)
+  {
     drawBackground();
     drawBattery(batteryPercent);
+    drawPage();
     refreshScreen = false;
   }
   if ((millis() - lastMillisBatteryRead) > batteryReadFreq)
-    {
-      batteryPercent = readBattery();
-      lastMillisBatteryRead = millis();
-    }
-  if (deviceConnected)
   {
-    if (digitalRead(INTPin) == LOW)
+    batteryPercent = readBattery();
+    lastMillisBatteryRead = millis();
+  }
+
+  if (digitalRead(INTPin) == LOW)
+  {
+    int ID = getButtonIdFormPin(mcp.getLastInterruptPin());
+    //      bool state = mcp.digitalRead(ID);
+
+    bool state = !lastState[ID];
+
+    lastState[ID] = state;
+    char string = 'a' + ID+15*page;
+    Serial.print("Switch changed: " + String(ID) + " ");
+    Serial.println("New state: " + String(state));
+    Serial.println("char:" + String(string));
+
+    if (showKeyString && showKeyStringOld)
     {
-      int ID = getButtonIdFormPin(mcp.getLastInterruptPin());
-//      bool state = mcp.digitalRead(ID);
-
-      bool state = !lastState[ID];
-
-      lastState[ID] = state;
-      char string = 'a'+ID;
-      Serial.print("Switch changed: " + String(ID) + " ");
-      Serial.println("New state: " + String(state));
-      Serial.println("char:"+String(string));
-      Serial.println(string);
+      drawKeyString(string, ID);
+    }
+    else
+    {
       bleKeyboard.press(KEY_LEFT_CTRL);
       bleKeyboard.press(KEY_LEFT_ALT);
       bleKeyboard.press(KEY_LEFT_SHIFT);
       bleKeyboard.press(string);
       delay(1);
       bleKeyboard.releaseAll();
-      switchStates[ID] = !state;
-      //writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
-      mcp.clearInterrupts();
+      Serial.println("sent over ble");
     }
-    encoder1Switch = !digitalRead(encoder1PinSwitch);
-    encoder2Switch = !digitalRead(encoder2PinSwitch);
-    if (encoder1Switch != encoder1SwitchLast)
-    {
-      Serial.print("Encoder changed: " + String(-encoder1Id) + " ");
-      Serial.println("New state: " + String(encoder1Switch));
-      //writeCharacteristic(keyPressCharacteristic, String(String(encoder1Id) + ";" + String(encoder1Switch)));
-      encoder1SwitchLast = encoder1Switch;
-    }
-    if (encoder2Switch != encoder2SwitchLast)
-    {
-      Serial.print("Encoder changed: " + String(-encoder2Id) + " ");
-      Serial.println("New state: " + String(encoder2Switch));
-      //writeCharacteristic(keyPressCharacteristic, String(String(encoder2Id) + ";" + String(encoder2Switch)));
-      encoder2SwitchLast = encoder2Switch;
-    }
+    switchStates[ID] = !state;
+    // writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
+    mcp.clearInterrupts();
+  }
+  encoder1Switch = !digitalRead(encoder1PinSwitch);
+  encoder2Switch = !digitalRead(encoder2PinSwitch);
+  if (encoder1Switch != encoder1SwitchLast)
+  {
+    Serial.print("Encoder changed: " + String(-encoder1Id) + " ");
+    Serial.println("New state: " + String(encoder1Switch));
+    // writeCharacteristic(keyPressCharacteristic, String(String(encoder1Id) + ";" + String(encoder1Switch)));
+    encoder1SwitchLast = encoder1Switch;
+  }
+  if (encoder2Switch != encoder2SwitchLast)
+  {
+    Serial.print("Encoder changed: " + String(-encoder2Id) + " ");
+    Serial.println("New state: " + String(encoder2Switch));
+    // writeCharacteristic(keyPressCharacteristic, String(String(encoder2Id) + ";" + String(encoder2Switch)));
+    encoder2SwitchLast = encoder2Switch;
+  }
 
-    encoder1PinANow = digitalRead(encoder1PinA);
-    if ((encoder1PinALast == HIGH) && (encoder1PinANow == LOW))
+  encoder1PinANow = digitalRead(encoder1PinA);
+  if ((encoder1PinALast == HIGH) && (encoder1PinANow == LOW))
+  {
+    if (digitalRead(encoder1PinB) == HIGH)
     {
-      if (digitalRead(encoder1PinB) == HIGH)
+      if (encoder1Switch)
+      {
+        if (page < 2)
+        {
+          page++;
+        }
+        else
+        {
+          page = 0;
+        }
+      }
+      else
       {
         encoder1Pos++;
+      }
+    }
+    else
+    {
+      if (encoder1Switch)
+      {
+        if (page > 0)
+        {
+          page--;
+        }
+        else
+        {
+          page = 2;
+        }
       }
       else
       {
         encoder1Pos--;
       }
-      Serial.println(encoder1Pos);
-      //writeCharacteristic(encoder1Characteristic, String(encoder1Pos));
     }
-    encoder1PinALast = encoder1PinANow;
-    encoder2PinANow = digitalRead(encoder2PinA);
-    if ((encoder2PinALast == HIGH) && (encoder2PinANow == LOW))
+    Serial.println(encoder1Pos);
+    // writeCharacteristic(encoder1Characteristic, String(encoder1Pos));
+  }
+  encoder1PinALast = encoder1PinANow;
+  encoder2PinANow = digitalRead(encoder2PinA);
+  if ((encoder2PinALast == HIGH) && (encoder2PinANow == LOW))
+  {
+    if (digitalRead(encoder2PinB) == HIGH)
     {
-      if (digitalRead(encoder2PinB) == HIGH)
-      {
-        encoder2Pos++;
-      }
-      else
-      {
-        encoder2Pos--;
-      }
-      Serial.println(encoder2Pos);
-      //writeCharacteristic(encoder2Characteristic, String(encoder2Pos));
+      encoder2Pos++;
     }
-    encoder2PinALast = encoder2PinANow;
-
+    else
+    {
+      encoder2Pos--;
+    }
+    Serial.println(encoder2Pos);
+    // writeCharacteristic(encoder2Characteristic, String(encoder2Pos));
+  }
+  encoder2PinALast = encoder2PinANow;
+  if (deviceConnected)
+  {
     if ((millis() - lastMillisLED) > ledFreqConnected)
     {
       ledState = !ledState;
@@ -413,6 +529,5 @@ void loop()
       statLED(ledState);
       lastMillisLED = millis();
     }
-    mcp.clearInterrupts();
   }
 }
