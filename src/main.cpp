@@ -54,8 +54,8 @@ bool deviceConnected = false;
 int interval = 50;
 unsigned long lastMillisLED = 0;
 
-const int ledFreqDisconnected = 2000;
-const int ledFreqConnected = 100;
+const int ledFreqDisconnected = 100;
+const int ledFreqConnected = 2000;
 const int ledDim = 50;
 
 bool ledState;

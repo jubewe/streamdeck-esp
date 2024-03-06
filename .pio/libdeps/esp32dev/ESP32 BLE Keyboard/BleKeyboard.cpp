@@ -122,12 +122,12 @@ void BleKeyboard::begin(void)
 
 #if defined(USE_NIMBLE)
 
-  //BLEDevice::setSecurityAuth(true, true, true);
+  BLEDevice::setSecurityAuth(true, false, false);
 
 #else
 
-  //BLESecurity* pSecurity = new BLESecurity();
-  //pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
+  BLESecurity* pSecurity = new BLESecurity();
+  pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
 
 #endif // USE_NIMBLE
 
