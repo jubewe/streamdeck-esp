@@ -54,8 +54,8 @@ bool deviceConnected = false;
 int interval = 50;
 unsigned long lastMillisLED = 0;
 
-const int ledFreqDisconnected = 2000;
-const int ledFreqConnected = 100;
+const int ledFreqDisconnected = 200;
+const int ledFreqConnected = 2000;
 const int ledDim = 50;
 
 bool ledState;
@@ -66,6 +66,11 @@ int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6}
 
 const int encoder1Id = -1;
 const int encoder2Id = -2;
+
+// #define virtualKeysNum 30
+// const std::map<char, MediaKeyReport[2]> virtualKeysMap = {
+//     {'Play Pause', KEY_MEDIA_PLAY_PAUSE},
+// };
 
 int getButtonIdFromPin(int buttonId)
 {
@@ -356,6 +361,7 @@ int batteryReadFreq = 1000;
 
 bool showKeyString = false;
 bool showKeyStringOld = false;
+bool setKeyMode = false;
 
 void loop()
 {
