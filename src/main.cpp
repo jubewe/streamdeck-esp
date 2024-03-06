@@ -67,9 +67,9 @@ int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6}
 const int encoder1Id = -1;
 const int encoder2Id = -2;
 
-int getButtonIdFormPin(int buttonId)
+int getButtonIdFromPin(int buttonId)
 {
-  for (int i = 0; i <= numSwitches; ++i)
+  for (int i = 0; i <= numSwitches; i++)
   {
     if (buttonMap[i] == buttonId)
     {
@@ -200,44 +200,45 @@ void statLED(bool state)
 void drawBackground()
 {
   tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 2, TFT_BLACK);
-  tft.drawCentreString(DEVICE_NAME, (DISPLAY_WIDTH - 45-10) / 2, 10, 2);
-  tft.drawCentreString(DEVICE_FIRMWARE, (DISPLAY_WIDTH - 45-10) / 2, 33-5, 1);
+  tft.drawCentreString(DEVICE_NAME, (DISPLAY_WIDTH - 45 - 10) / 2, 10, 2);
+  tft.drawCentreString(DEVICE_FIRMWARE, (DISPLAY_WIDTH - 45 - 10) / 2, 33 - 5, 1);
 
   if (deviceConnected)
   {
-    tft.drawCentreString("  connected  ", (DISPLAY_WIDTH - 45-10) / 2, 65, 1);
+    tft.drawCentreString("  connected  ", (DISPLAY_WIDTH - 45 - 10) / 2, 65, 1);
     tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_SKYBLUE);
   }
   else
   {
-    tft.drawCentreString("disconnected", (DISPLAY_WIDTH - 45-10) / 2, 65, 1);
+    tft.drawCentreString("disconnected", (DISPLAY_WIDTH - 45 - 10) / 2, 65, 1);
     tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_DARKGREY);
   }
   if (config)
   {
-    tft.drawCentreString("(configuration)", (DISPLAY_WIDTH - 45-10) / 2, 50, 1);
+    tft.drawCentreString("(configuration)", (DISPLAY_WIDTH - 45 - 10) / 2, 50, 1);
     tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_GREEN);
   }
-  else 
+  else
   {
-    tft.drawCentreString("               ", (DISPLAY_WIDTH - 45-10) / 2, 50, 1);
+    tft.drawCentreString("               ", (DISPLAY_WIDTH - 45 - 10) / 2, 50, 1);
   }
 }
 
 int page = 0;
+int pageMax = 2;
 int pageOld = 0;
 
 void drawPage()
 {
-  tft.drawCentreString(String(page + 1), DISPLAY_WIDTH - 47-3, DISPLAY_HEIGHT / 2 - 10, 4);
-  tft.drawCircle(DISPLAY_WIDTH - 48-3, DISPLAY_HEIGHT / 2, 14, TFT_LIGHTGREY);
+  tft.drawCentreString(String(page + 1), DISPLAY_WIDTH - 47 - 3, DISPLAY_HEIGHT / 2 - 10, 4);
+  tft.drawCircle(DISPLAY_WIDTH - 48 - 3, DISPLAY_HEIGHT / 2, 14, TFT_LIGHTGREY);
 }
 
 void drawKeyString(char key, int id)
 {
   tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 4, TFT_BLACK);
   String value = preferences.getString(String(key).c_str(), "---");
-  tft.drawCentreString("key " + String(id) + " / page "+String(page+1)+":", (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 30, 2);
+  tft.drawCentreString("key " + String(id) + " / page " + String(page + 1) + ":", (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 30, 2);
 
   tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 10, 2);
 }
@@ -406,15 +407,19 @@ void loop()
     lastMillisBatteryRead = millis();
   }
 
+  encoder1Switch = !digitalRead(encoder1PinSwitch);
+  encoder2Switch = !digitalRead(encoder2PinSwitch);
+
   if (digitalRead(INTPin) == LOW)
   {
-    int ID = getButtonIdFormPin(mcp.getLastInterruptPin());
+    int lastInterrupted = mcp.getLastInterruptPin();
+    int ID = getButtonIdFromPin(mcp.getLastInterruptPin());
     //      bool state = mcp.digitalRead(ID);
 
     bool state = !lastState[ID];
 
     lastState[ID] = state;
-    char string = 'a' + ID+15*page;
+    char string = 'a' + ID + 15 * page;
     Serial.print("Switch changed: " + String(ID) + " ");
     Serial.println("New state: " + String(state));
     Serial.println("char:" + String(string));
@@ -423,7 +428,19 @@ void loop()
     {
       drawKeyString(string, ID);
     }
-    else
+    else if ((encoder1Switch == HIGH) && (state == HIGH))
+    {
+      // page = ID;
+      Serial.println("Switch to page " + String(ID));
+      if (ID <= pageMax)
+      {
+        page = ID;
+      }
+    }
+    else if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == LOW))
+    {
+    }
+    else if ((state == HIGH))
     {
       bleKeyboard.press(KEY_LEFT_CTRL);
       bleKeyboard.press(KEY_LEFT_ALT);
@@ -437,8 +454,7 @@ void loop()
     // writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
     mcp.clearInterrupts();
   }
-  encoder1Switch = !digitalRead(encoder1PinSwitch);
-  encoder2Switch = !digitalRead(encoder2PinSwitch);
+
   if (encoder1Switch != encoder1SwitchLast)
   {
     Serial.print("Encoder changed: " + String(-encoder1Id) + " ");
@@ -461,7 +477,7 @@ void loop()
     {
       if (encoder1Switch)
       {
-        if (page < 2)
+        if (page < pageMax)
         {
           page++;
         }
@@ -485,7 +501,7 @@ void loop()
         }
         else
         {
-          page = 2;
+          page = pageMax;
         }
       }
       else
@@ -495,6 +511,10 @@ void loop()
     }
     Serial.println(encoder1Pos);
     // writeCharacteristic(encoder1Characteristic, String(encoder1Pos));
+  }
+
+  if ((encoder1PinANow == HIGH))
+  {
   }
   encoder1PinALast = encoder1PinANow;
   encoder2PinANow = digitalRead(encoder2PinA);
