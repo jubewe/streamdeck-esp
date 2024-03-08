@@ -135,7 +135,8 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
 {
   void onRead(NimBLECharacteristic *pCharacteristic)
   {
-
+    String pUUID = pCharacteristic->getUUID().toString().c_str();
+    String pValue = pCharacteristic->getValue().c_str();
     Serial.print(pCharacteristic->getUUID().toString().c_str());
     Serial.print(": onRead(), value: ");
     Serial.println(pCharacteristic->getValue().c_str());
@@ -163,6 +164,18 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
         Serial.println(pValue);
         Serial.println(id);
         Serial.println(value);
+      }
+      // pattern: "g,{id}"
+      if (pValue[0] == 'g')
+      {
+        int divider1 = pValue.indexOf(",");
+        String id = pValue.substring(divider1 + 1, pValue.length());
+        String value = preferences.getString(id.c_str(), "---");
+        Serial.print("send config: ");
+        Serial.println(pValue);
+        Serial.println(id);
+        Serial.println(value);
+        writeCharacteristic(configCharacteristic, "s,"+id+","+value);
       }
     }
   };
@@ -237,7 +250,7 @@ void drawPage()
 void drawKeyString(char key, int id)
 {
   tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 4, TFT_BLACK);
-  String value = preferences.getString(String(key).c_str(), "---");
+  String value = preferences.getString(String(id).c_str(), "---");
   tft.drawCentreString("key " + String(id) + " / page " + String(page + 1) + ":", (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 30, 2);
 
   tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 10, 2);
@@ -291,7 +304,7 @@ void setup()
     pServer->setCallbacks(&serverCB);
     pService = pServer->createService(SERVICE_UUID);
     keyPressCharacteristic = pService->createCharacteristic(KEY_PRESS_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
-    configCharacteristic = pService->createCharacteristic(CONFIG_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE);
+    configCharacteristic = pService->createCharacteristic(CONFIG_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::INDICATE | NIMBLE_PROPERTY::WRITE);
     encoder1Characteristic = pService->createCharacteristic(ENCODER1_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
     encoder2Characteristic = pService->createCharacteristic(ENCODER2_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
     keyPressCharacteristic->setCallbacks(&characteristicsCallback);
