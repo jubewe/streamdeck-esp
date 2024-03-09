@@ -51,3 +51,5 @@ Module.symvers
 Mkfile.old
 dkms.conf
 .vscode/c_cpp_properties.json
+.pio/build/
+.pio/build/esp32dev/idedata.json

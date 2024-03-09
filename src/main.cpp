@@ -10,6 +10,9 @@
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
 #define DEVICE_FIRMWARE "V1.2"
 
+// settings
+bool setting_saveOldMenuPage = false;
+
 Adafruit_MAX17048 lipo;
 BleKeyboard bleKeyboard;
 Preferences preferences;
@@ -54,8 +57,8 @@ bool deviceConnected = false;
 int interval = 50;
 unsigned long lastMillisLED = 0;
 
-const int ledFreqDisconnected = 2000;
-const int ledFreqConnected = 100;
+const int ledFreqDisconnected = 200;
+const int ledFreqConnected = 2000;
 const int ledDim = 50;
 
 bool ledState;
@@ -140,7 +143,8 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
 {
   void onRead(NimBLECharacteristic *pCharacteristic)
   {
-
+    String pUUID = pCharacteristic->getUUID().toString().c_str();
+    String pValue = pCharacteristic->getValue().c_str();
     Serial.print(pCharacteristic->getUUID().toString().c_str());
     Serial.print(": onRead(), value: ");
     Serial.println(pCharacteristic->getValue().c_str());
@@ -168,6 +172,18 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
         Serial.println(pValue);
         Serial.println(id);
         Serial.println(value);
+      }
+      // pattern: "g,{id}"
+      if (pValue[0] == 'g')
+      {
+        int divider1 = pValue.indexOf(",");
+        String id = pValue.substring(divider1 + 1, pValue.length());
+        String value = preferences.getString(id.c_str(), "---");
+        Serial.print("send config: ");
+        Serial.println(pValue);
+        Serial.println(id);
+        Serial.println(value);
+        writeCharacteristic(configCharacteristic, "s," + id + "," + value);
       }
     }
   };
@@ -242,7 +258,7 @@ void drawPage()
 void drawKeyString(char key, int id)
 {
   tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 4, TFT_BLACK);
-  String value = preferences.getString(String(key).c_str(), "---");
+  String value = preferences.getString(String(id).c_str(), "---");
   tft.drawCentreString("key " + String(id) + " / page " + String(page + 1) + ":", (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 30, 2);
 
   tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 10, 2);
@@ -296,7 +312,7 @@ void setup()
     pServer->setCallbacks(&serverCB);
     pService = pServer->createService(SERVICE_UUID);
     keyPressCharacteristic = pService->createCharacteristic(KEY_PRESS_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
-    configCharacteristic = pService->createCharacteristic(CONFIG_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE);
+    configCharacteristic = pService->createCharacteristic(CONFIG_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::INDICATE | NIMBLE_PROPERTY::WRITE);
     encoder1Characteristic = pService->createCharacteristic(ENCODER1_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
     encoder2Characteristic = pService->createCharacteristic(ENCODER2_CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
     keyPressCharacteristic->setCallbacks(&characteristicsCallback);
@@ -357,16 +373,34 @@ int readBattery()
 
 int i = 0;
 unsigned long lastMillisBatteryRead;
-int batteryReadFreq = 1000;
+int batteryReadFreq = 10000;
 
+#define menusNum 3
+#define menusSwitchThreshold 4
 bool showKeyString = false;
 bool showKeyStringOld = false;
 bool setKeyMode = false;
+bool menuMode = false;
+bool inSubmenu = false;
+bool showKeyDisabled = false;
+bool pageSwitchDisabled = false;
+int menuPage = 0;
+int menuEncoderPos = 0;
+int menuEncoderPosLast = 0;
+
+bool closeMenu = false;
 
 void loop()
 {
 
-  showKeyString = !digitalRead(encoder2PinSwitch);
+  if (menuMode)
+  {
+    showKeyString = false;
+  }
+  else
+  {
+    showKeyString = !digitalRead(encoder2PinSwitch);
+  }
 
   if (showKeyString && !showKeyStringOld)
   {
@@ -416,49 +450,50 @@ void loop()
   encoder1Switch = !digitalRead(encoder1PinSwitch);
   encoder2Switch = !digitalRead(encoder2PinSwitch);
 
-  if (digitalRead(INTPin) == LOW)
+  if ((encoder1Switch == HIGH && encoder2Switch == HIGH) && (encoder1SwitchLast == LOW || encoder2SwitchLast == LOW))
   {
-    int lastInterrupted = mcp.getLastInterruptPin();
-    int ID = getButtonIdFromPin(mcp.getLastInterruptPin());
-    //      bool state = mcp.digitalRead(ID);
-
-    bool state = !lastState[ID];
-
-    lastState[ID] = state;
-    char string = 'a' + ID + 15 * page;
-    Serial.print("Switch changed: " + String(ID) + " ");
-    Serial.println("New state: " + String(state));
-    Serial.println("char:" + String(string));
-
-    if (showKeyString && showKeyStringOld)
+    if (inSubmenu)
     {
-      drawKeyString(string, ID);
+      inSubmenu = false;
     }
-    else if ((encoder1Switch == HIGH) && (state == HIGH))
+    else
     {
-      // page = ID;
-      Serial.println("Switch to page " + String(ID));
-      if (ID <= pageMax)
+      menuMode = !menuMode;
+      inSubmenu = false;
+      if (!setting_saveOldMenuPage)
       {
-        page = ID;
+        menuPage = 0;
+        menuEncoderPosLast = 0;
       }
+      showKeyString = false;
+      Serial.print("Menu ");
+      Serial.println(menuMode ? "show" : "hide");
     }
-    else if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == LOW))
+  }
+  else if (menuMode && !inSubmenu && encoder1SwitchLast == LOW && encoder2SwitchLast == LOW && encoder2Switch == HIGH)
+  {
+    inSubmenu = true;
+
+    switch (menuPage)
     {
-    }
-    else if ((state == HIGH))
+    case menusNum - 1:
     {
-      bleKeyboard.press(KEY_LEFT_CTRL);
-      bleKeyboard.press(KEY_LEFT_ALT);
-      bleKeyboard.press(KEY_LEFT_SHIFT);
-      bleKeyboard.press(string);
-      delay(1);
-      bleKeyboard.releaseAll();
-      Serial.println("sent over ble");
+      closeMenu = true;
     }
-    switchStates[ID] = !state;
-    // writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
-    mcp.clearInterrupts();
+    }
+  }
+
+  if (closeMenu)
+  {
+    menuMode = false;
+    inSubmenu = false;
+    if (!setting_saveOldMenuPage)
+    {
+      menuPage = 0;
+      menuEncoderPosLast = 0;
+    }
+
+    closeMenu = false;
   }
 
   if (encoder1Switch != encoder1SwitchLast)
@@ -523,21 +558,140 @@ void loop()
   {
   }
   encoder1PinALast = encoder1PinANow;
+
   encoder2PinANow = digitalRead(encoder2PinA);
   if ((encoder2PinALast == HIGH) && (encoder2PinANow == LOW))
   {
     if (digitalRead(encoder2PinB) == HIGH)
     {
-      encoder2Pos++;
+      if (menuMode)
+      {
+        if (!inSubmenu)
+        {
+          if (menuEncoderPos < 0)
+            menuEncoderPos = 0;
+          menuEncoderPos++;
+          if ((menuPage < menusNum - 1) && menuEncoderPos >= menusSwitchThreshold)
+          {
+            menuPage++;
+            menuEncoderPos = 0;
+          }
+          menuEncoderPosLast++;
+        }
+      }
+      else
+        encoder2Pos++;
     }
     else
     {
-      encoder2Pos--;
+      if (menuMode)
+      {
+        if (!inSubmenu)
+        {
+          if (menuEncoderPos > 0)
+            menuEncoderPos = 0;
+          menuEncoderPos--;
+          if (menuPage > 0 && menuEncoderPos <= -menusSwitchThreshold)
+          {
+            menuPage--;
+            menuEncoderPos = 0;
+          }
+        }
+      }
+      else
+        encoder2Pos--;
     }
     Serial.println(encoder2Pos);
+    Serial.println("menu page " + String(menuPage));
     // writeCharacteristic(encoder2Characteristic, String(encoder2Pos));
   }
   encoder2PinALast = encoder2PinANow;
+
+  if (menuMode)
+  {
+    if (inSubmenu)
+    {
+      switch (menuPage)
+      {
+      case menusNum - 1:
+      {
+        // display exit
+
+        break;
+      }
+      }
+    }
+  }
+
+  if (digitalRead(INTPin) == LOW)
+  {
+    int lastInterrupted = mcp.getLastInterruptPin();
+    int ID = getButtonIdFromPin(mcp.getLastInterruptPin());
+    //      bool state = mcp.digitalRead(ID);
+
+    bool state = !lastState[ID];
+
+    lastState[ID] = state;
+    char string = 'a' + ID + 15 * page;
+    Serial.print("Switch changed: " + String(ID) + " ");
+    Serial.println("New state: " + String(state));
+    Serial.println("char:" + String(string));
+
+    if (!menuMode && showKeyString && showKeyStringOld)
+    {
+      drawKeyString(string, ID);
+    }
+    // else if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == LOW))
+    // {
+    // }
+    else if (state == HIGH)
+    {
+      if ((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH))
+      {
+        // if (menuMode)
+        // {
+        //   if (ID <= menusNum)
+        //   {
+        //     menuPage = ID;
+        //   }
+        // }
+        // else
+        // {
+        if (!pageSwitchDisabled)
+        {
+          Serial.println("Switch to page " + String(ID));
+          if (ID <= pageMax)
+          {
+            page = ID;
+          }
+        }
+        // }
+      }
+      else
+      {
+        if (!menuMode && !showKeyString)
+        {
+          bleKeyboard.press(KEY_LEFT_CTRL);
+          bleKeyboard.press(KEY_LEFT_ALT);
+          bleKeyboard.press(KEY_LEFT_SHIFT);
+          bleKeyboard.press(string);
+          delay(1);
+          bleKeyboard.releaseAll();
+          Serial.println("sent over ble");
+        }
+      }
+    }
+
+    switchStates[ID] = !state;
+    // writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
+    mcp.clearInterrupts();
+  }
+
+  // Serial.println("Menu data: ");
+  // Serial.print("enabled: " + String(menuMode));
+  // Serial.print("in submenu: " + String(inSubmenu));
+  // Serial.print("page: " + String(menuPage));
+
   if (deviceConnected)
   {
     if ((millis() - lastMillisLED) > ledFreqConnected)
