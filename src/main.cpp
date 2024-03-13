@@ -361,19 +361,12 @@ void setup()
   }
 
   memset(switchStates, false, sizeof(switchStates));
-}
-
-int readBattery()
-{
-  int percent = constrain(int(lipo.cellPercent()), 0, 99);
-  Serial.println("battery percent: " + String(percent));
-  bleKeyboard.setBatteryLevel(percent);
-  return percent;
+  // bleKeyboard.setBatteryLevel(19);
 }
 
 int i = 0;
 unsigned long lastMillisBatteryRead;
-int batteryReadFreq = 10000;
+int batteryReadFreq = 1000;
 
 #define menusNum 3
 #define menusSwitchThreshold 4
@@ -388,11 +381,12 @@ int menuPage = 0;
 int menuEncoderPos = 0;
 int menuEncoderPosLast = 0;
 
+// last menu page = exit menu
+
 bool closeMenu = false;
 
 void loop()
 {
-
   if (menuMode)
   {
     showKeyString = false;
@@ -443,7 +437,10 @@ void loop()
   }
   if ((millis() - lastMillisBatteryRead) > batteryReadFreq)
   {
-    batteryPercent = readBattery();
+    batteryPercent = constrain(int(lipo.cellPercent()), 0, 99);
+    Serial.println("battery level: " + String(batteryPercent) + "%");
+    Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
+    bleKeyboard.setBatteryLevel(batteryPercent);
     lastMillisBatteryRead = millis();
   }
 
