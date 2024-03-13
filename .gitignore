@@ -53,3 +53,7 @@ dkms.conf
 .vscode/c_cpp_properties.json
 .pio/build/
 .pio/build/esp32dev/idedata.json
+.pio/build/esp32dev/bootloader.bin
+.pio/build/project.checksum
+.pio/build/esp32dev/.sconsign311.dblite
+.pio/build/esp32dev/bootloader.bin

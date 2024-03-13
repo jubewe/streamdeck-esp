@@ -8,7 +8,7 @@
 
 #define DEVICE_NAME "Streamdeck"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
-#define DEVICE_FIRMWARE "V1.2"
+#define DEVICE_FIRMWARE "V1.3"
 
 // settings
 bool setting_saveOldMenuPage = false;
@@ -375,7 +375,6 @@ int readBattery()
 {
   int percent = constrain(int(lipo.cellPercent()), 0, 99);
   Serial.println("battery percent: " + String(percent));
-  bleKeyboard.setBatteryLevel(percent);
   return percent;
 }
 
@@ -439,6 +438,7 @@ void loop()
   }
   if (batteryPercent != batteryPercentOld)
   {
+    bleKeyboard.setBatteryLevel(batteryPercent);
     drawBattery(batteryPercent);
     batteryPercentOld = batteryPercent;
   }
