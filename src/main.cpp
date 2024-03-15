@@ -8,7 +8,7 @@
 
 #define DEVICE_NAME "Streamdeck"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
-#define DEVICE_FIRMWARE "V1.2"
+#define DEVICE_FIRMWARE "V1.3"
 
 // settings
 bool setting_saveOldMenuPage = false;
@@ -69,11 +69,6 @@ int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6}
 
 const int encoder1Id = -1;
 const int encoder2Id = -2;
-
-// #define virtualKeysNum 30
-// const std::map<char, MediaKeyReport[2]> virtualKeysMap = {
-//     {'Play Pause', KEY_MEDIA_PLAY_PAUSE},
-// };
 
 int getButtonIdFromPin(int buttonId)
 {
@@ -160,18 +155,24 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
     if (pUUID == CONFIG_CHARACTERISTIC_UUID)
     {
 
-      // pattern: "c,{id},{value}"
+      // pattern: "c,{id},{value},{hold}"
       if (pValue[0] == 'c')
       {
         int divider1 = pValue.indexOf(",");
         int divider2 = pValue.indexOf(",", divider1 + 1);
+        int divider3 = pValue.indexOf(",", divider2 + 1);
         String id = pValue.substring(divider1 + 1, divider2);
-        String value = pValue.substring(divider2 + 1, pValue.length());
+        String value = pValue.substring(divider2 + 1, divider3);
+        bool hold = pValue.substring(divider3 + 1, pValue.length()) == "1";
         preferences.putString(id.c_str(), value);
+        preferences.putBool((id + "hold").c_str(), hold);
+
         Serial.print("new config: ");
         Serial.println(pValue);
         Serial.println(id);
         Serial.println(value);
+        Serial.println(value);
+        Serial.println(hold);
       }
       // pattern: "g,{id}"
       if (pValue[0] == 'g')
@@ -179,11 +180,13 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
         int divider1 = pValue.indexOf(",");
         String id = pValue.substring(divider1 + 1, pValue.length());
         String value = preferences.getString(id.c_str(), "---");
+        bool hold = preferences.getBool((id + "hold").c_str(), false);
         Serial.print("send config: ");
         Serial.println(pValue);
         Serial.println(id);
         Serial.println(value);
-        writeCharacteristic(configCharacteristic, "s," + id + "," + value);
+        Serial.println(hold);
+        writeCharacteristic(configCharacteristic, "s," + id + "," + value + "," + String(hold));
       }
     }
   };
@@ -361,7 +364,13 @@ void setup()
   }
 
   memset(switchStates, false, sizeof(switchStates));
-  // bleKeyboard.setBatteryLevel(19);
+}
+
+int readBattery()
+{
+  int percent = constrain(int(lipo.cellPercent()), 0, 99);
+  Serial.println("battery percent: " + String(percent));
+  return percent;
 }
 
 int i = 0;
@@ -425,6 +434,7 @@ void loop()
   }
   if (batteryPercent != batteryPercentOld)
   {
+    bleKeyboard.setBatteryLevel(batteryPercent);
     drawBattery(batteryPercent);
     batteryPercentOld = batteryPercent;
   }
@@ -641,9 +651,9 @@ void loop()
     // else if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == LOW))
     // {
     // }
-    else if (state == HIGH)
+    else
     {
-      if ((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH))
+      if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == HIGH))
       {
         // if (menuMode)
         // {
@@ -668,12 +678,37 @@ void loop()
       {
         if (!menuMode && !showKeyString)
         {
-          bleKeyboard.press(KEY_LEFT_CTRL);
-          bleKeyboard.press(KEY_LEFT_ALT);
-          bleKeyboard.press(KEY_LEFT_SHIFT);
-          bleKeyboard.press(string);
-          delay(1);
-          bleKeyboard.releaseAll();
+          bool hold = preferences.getBool((String(ID) + "hold").c_str(), false);
+
+          if (hold)
+          {
+            if (state)
+            {
+              bleKeyboard.press(KEY_LEFT_CTRL);
+              bleKeyboard.press(KEY_LEFT_ALT);
+              bleKeyboard.press(KEY_LEFT_SHIFT);
+              bleKeyboard.press(string);
+              Serial.println("hold");
+            }
+            else
+            {
+              bleKeyboard.releaseAll();
+              Serial.println("release");
+            }
+          }
+          else
+          {
+            if (state == HIGH)
+            {
+              bleKeyboard.press(KEY_LEFT_CTRL);
+              bleKeyboard.press(KEY_LEFT_ALT);
+              bleKeyboard.press(KEY_LEFT_SHIFT);
+              bleKeyboard.press(string);
+              delay(1);
+              bleKeyboard.releaseAll();
+              Serial.println("press");
+            }
+          }
           Serial.println("sent over ble");
         }
       }

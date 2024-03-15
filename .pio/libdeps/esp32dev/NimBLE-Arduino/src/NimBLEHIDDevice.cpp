@@ -47,7 +47,7 @@ NimBLEHIDDevice::NimBLEHIDDevice(NimBLEServer* server) {
 	 * Mandatory battery level characteristic with notification and presence descriptor
 	 */
 	m_batteryLevelCharacteristic = m_batteryService->createCharacteristic((uint16_t) 0x2a19, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
-	NimBLE2904* batteryLevelDescriptor = (NimBLE2904*)m_batteryLevelCharacteristic->createDescriptor((uint16_t) 0x2904);
+	NimBLE2904* batteryLevelDescriptor = (NimBLE2904*)m_batteryLevelCharacteristic->createDescriptor((uint16_t) 0x2904);	
 	batteryLevelDescriptor->setFormat(NimBLE2904::FORMAT_UINT8);
 	batteryLevelDescriptor->setNamespace(1);
 	batteryLevelDescriptor->setUnit(0x27ad);
@@ -199,6 +199,7 @@ NimBLECharacteristic* NimBLEHIDDevice::protocolMode() {
  */
 void NimBLEHIDDevice::setBatteryLevel(uint8_t level) {
 	m_batteryLevelCharacteristic->setValue(&level, 1);
+	m_batteryLevelCharacteristic->notify();
 }
 /*
  * @brief Returns battery level characteristic
