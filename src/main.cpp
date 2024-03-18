@@ -703,6 +703,8 @@ void loop()
               bleKeyboard.press(KEY_LEFT_CTRL);
               bleKeyboard.press(KEY_LEFT_ALT);
               bleKeyboard.press(KEY_LEFT_SHIFT);
+              bleKeyboard.press(keyMap["KEY_LEFT_CTRL"]);
+              keyMap.find("KEY_LEFT_CTRL");
               bleKeyboard.press(string);
               delay(1);
               bleKeyboard.releaseAll();
