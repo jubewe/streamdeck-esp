@@ -10,6 +10,73 @@
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
 #define DEVICE_FIRMWARE "V1.3"
 
+std::map<std::string, uint8_t> customKeyMap = {
+    {"KEY_LEFT_CTRL", KEY_LEFT_CTRL},
+    {"KEY_LEFT_SHIFT", KEY_LEFT_SHIFT},
+    {"KEY_LEFT_ALT", KEY_LEFT_ALT},
+    {"KEY_LEFT_GUI", KEY_LEFT_GUI},
+    {"KEY_RIGHT_CTRL", KEY_RIGHT_CTRL},
+    {"KEY_RIGHT_SHIFT", KEY_RIGHT_SHIFT},
+    {"KEY_RIGHT_ALT", KEY_RIGHT_ALT},
+    {"KEY_RIGHT_GUI", KEY_RIGHT_GUI},
+    {"KEY_UP_ARROW", KEY_UP_ARROW},
+    {"KEY_DOWN_ARROW", KEY_DOWN_ARROW},
+    {"KEY_LEFT_ARROW", KEY_LEFT_ARROW},
+    {"KEY_RIGHT_ARROW", KEY_RIGHT_ARROW},
+    {"KEY_BACKSPACE", KEY_BACKSPACE},
+    {"KEY_TAB", KEY_TAB},
+    {"KEY_RETURN", KEY_RETURN},
+    {"KEY_ESC", KEY_ESC},
+    {"KEY_INSERT", KEY_INSERT},
+    {"KEY_PRTSC", KEY_PRTSC},
+    {"KEY_DELETE", KEY_DELETE},
+    {"KEY_PAGE_UP", KEY_PAGE_UP},
+    {"KEY_PAGE_DOWN", KEY_PAGE_DOWN},
+    {"KEY_HOME", KEY_HOME},
+    {"KEY_END", KEY_END},
+    {"KEY_CAPS_LOCK", KEY_CAPS_LOCK},
+    {"KEY_F1", KEY_F1},
+    {"KEY_F2", KEY_F2},
+    {"KEY_F3", KEY_F3},
+    {"KEY_F4", KEY_F4},
+    {"KEY_F5", KEY_F5},
+    {"KEY_F6", KEY_F6},
+    {"KEY_F7", KEY_F7},
+    {"KEY_F8", KEY_F8},
+    {"KEY_F9", KEY_F9},
+    {"KEY_F10", KEY_F10},
+    {"KEY_F11", KEY_F11},
+    {"KEY_F12", KEY_F12},
+    {"KEY_F13", KEY_F13},
+    {"KEY_F14", KEY_F14},
+    {"KEY_F15", KEY_F15},
+    {"KEY_F16", KEY_F16},
+    {"KEY_F17", KEY_F17},
+    {"KEY_F18", KEY_F18},
+    {"KEY_F19", KEY_F19},
+    {"KEY_F20", KEY_F20},
+    {"KEY_F21", KEY_F21},
+    {"KEY_F22", KEY_F22},
+    {"KEY_F23", KEY_F23},
+    {"KEY_F24", KEY_F24},
+    {"KEY_NUM_0", KEY_NUM_0},
+    {"KEY_NUM_1", KEY_NUM_1},
+    {"KEY_NUM_2", KEY_NUM_2},
+    {"KEY_NUM_3", KEY_NUM_3},
+    {"KEY_NUM_4", KEY_NUM_4},
+    {"KEY_NUM_5", KEY_NUM_5},
+    {"KEY_NUM_6", KEY_NUM_6},
+    {"KEY_NUM_7", KEY_NUM_7},
+    {"KEY_NUM_8", KEY_NUM_8},
+    {"KEY_NUM_9", KEY_NUM_9},
+    {"KEY_NUM_SLASH", KEY_NUM_SLASH},
+    {"KEY_NUM_ASTERISK", KEY_NUM_ASTERISK},
+    {"KEY_NUM_MINUS", KEY_NUM_MINUS},
+    {"KEY_NUM_PLUS", KEY_NUM_PLUS},
+    {"KEY_NUM_ENTER", KEY_NUM_ENTER},
+    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}
+};
+
 // settings
 bool setting_saveOldMenuPage = false;
 
@@ -116,6 +183,8 @@ class ServerCallbacks : public NimBLEServerCallbacks
 {
   void onConnect(NimBLEServer *pServer, ble_gap_conn_desc *desc)
   {
+    Serial.println("updateMTU to: " + String(NimBLEDevice::getMTU()));
+    //Serial.println("updateMTU to: " + String(pServer->getPeerMTU(desc->conn_handle)));
     deviceConnected = true;
     Serial.print("Client address: ");
     // NimBLEDevice::stopAdvertising();
@@ -155,38 +224,43 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
     if (pUUID == CONFIG_CHARACTERISTIC_UUID)
     {
 
-      // pattern: "c,{id},{value},{hold}"
+      // pattern: g,"id","info/value",{{"config"}},"clipboard"
       if (pValue[0] == 'c')
       {
-        int divider1 = pValue.indexOf(",");
-        int divider2 = pValue.indexOf(",", divider1 + 1);
-        int divider3 = pValue.indexOf(",", divider2 + 1);
-        String id = pValue.substring(divider1 + 1, divider2);
-        String value = pValue.substring(divider2 + 1, divider3);
-        bool hold = pValue.substring(divider3 + 1, pValue.length()) == "1";
+        int seperator1 = pValue.indexOf(",");
+        int seperator2 = pValue.indexOf(",", seperator1 + 1);
+        int seperator3 = pValue.indexOf(",{{", seperator2 + 1);
+        int seperator4 = pValue.indexOf("}},", seperator3 + 1);
+        String id = pValue.substring(seperator1 + 1, seperator2);
+        String value = pValue.substring(seperator2 + 1, seperator3);
+        String config = pValue.substring(seperator3 + 3, seperator4);
+        bool clipboard = pValue.substring(seperator4 + 3, pValue.length()) == "1";
         preferences.putString(id.c_str(), value);
-        preferences.putBool((id + "hold").c_str(), hold);
+        preferences.putString((String(id) + "config").c_str(), config);
+        preferences.putBool((id + "clipboard").c_str(), clipboard);
 
         Serial.print("new config: ");
         Serial.println(pValue);
         Serial.println(id);
         Serial.println(value);
-        Serial.println(value);
-        Serial.println(hold);
+        Serial.println(config);
+        Serial.println(clipboard);
       }
-      // pattern: "g,{id}"
+      // pattern: g,"id"
       if (pValue[0] == 'g')
       {
-        int divider1 = pValue.indexOf(",");
-        String id = pValue.substring(divider1 + 1, pValue.length());
+        int seperator1 = pValue.indexOf(",");
+        String id = pValue.substring(seperator1 + 1, pValue.length());
         String value = preferences.getString(id.c_str(), "---");
-        bool hold = preferences.getBool((id + "hold").c_str(), false);
+        String config = preferences.getString((String(id) + "config").c_str(), "");
+        bool clipboard = preferences.getBool((id + "clipboard").c_str(), false);
         Serial.print("send config: ");
         Serial.println(pValue);
         Serial.println(id);
         Serial.println(value);
-        Serial.println(hold);
-        writeCharacteristic(configCharacteristic, "s," + id + "," + value + "," + String(hold));
+        Serial.println(config);
+        Serial.println(clipboard);
+        writeCharacteristic(configCharacteristic, "s," + id + "," + value + ",{{"+ config + "}}," + String(clipboard));
       }
     }
   };
@@ -309,8 +383,10 @@ void setup()
   config = !digitalRead(encoder2PinSwitch);
   if (config)
   {
+    //NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
     NimBLEDevice::init(DEVICE_NAME_CONFIG);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+    NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
     pServer = NimBLEDevice::createServer();
     pServer->setCallbacks(&serverCB);
     pService = pServer->createService(SERVICE_UUID);
@@ -364,13 +440,6 @@ void setup()
   }
 
   memset(switchStates, false, sizeof(switchStates));
-}
-
-int readBattery()
-{
-  int percent = constrain(int(lipo.cellPercent()), 0, 99);
-  Serial.println("battery percent: " + String(percent));
-  return percent;
 }
 
 int i = 0;
@@ -448,8 +517,9 @@ void loop()
   if ((millis() - lastMillisBatteryRead) > batteryReadFreq)
   {
     batteryPercent = constrain(int(lipo.cellPercent()), 0, 99);
-    Serial.println("battery level: " + String(batteryPercent) + "%");
-    Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
+    //Serial.println("battery level: " + String(batteryPercent) + "%");
+    //Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
+    Serial.println("updateMTU0 to: " + String(NimBLEDevice::getMTU()));
     bleKeyboard.setBatteryLevel(batteryPercent);
     lastMillisBatteryRead = millis();
   }
@@ -678,38 +748,56 @@ void loop()
       {
         if (!menuMode && !showKeyString)
         {
-          bool hold = preferences.getBool((String(ID) + "hold").c_str(), false);
-
-          if (hold)
+          bool clipboard = preferences.getBool((String(ID) + "clipboard").c_str(), false);
+          String config = preferences.getString((String(ID) + "config").c_str(), "");
+          if (clipboard)
           {
-            if (state)
-            {
-              bleKeyboard.press(KEY_LEFT_CTRL);
-              bleKeyboard.press(KEY_LEFT_ALT);
-              bleKeyboard.press(KEY_LEFT_SHIFT);
-              bleKeyboard.press(string);
-              Serial.println("hold");
-            }
-            else
-            {
-              bleKeyboard.releaseAll();
-              Serial.println("release");
-            }
+            bleKeyboard.print(config);
+            
           }
           else
           {
+            int startPos = 0; // Starting position for searching
+            int separatorPos = 0; // Position of the '+' separator
+            while (separatorPos >= 0) {
+              separatorPos = config.indexOf('+', startPos); // Find the next '+' separator
+              String part;
+              if (separatorPos >= 0) { // If separator found
+                part = config.substring(startPos, separatorPos); // Extract the part between separators
+                startPos = separatorPos + 1; // Update starting position for the next search
+              } else { // If no more separators found
+                part = config.substring(startPos); // Extract the last part
+              }
+              if (state)
+            {
+              u_int8_t key = customKeyMap[part.c_str()];
+              if(key != 0){
+                bleKeyboard.press(key);
+              }else{
+                bleKeyboard.press(part[0]);
+              }
+              Serial.println("hold: "+part + "("+String(key)+")");
+            }
+            
+            }
+            if(!state)
+            {
+              bleKeyboard.releaseAll();
+              Serial.println("release all");
+            }
+            /*
             if (state == HIGH)
             {
               bleKeyboard.press(KEY_LEFT_CTRL);
               bleKeyboard.press(KEY_LEFT_ALT);
               bleKeyboard.press(KEY_LEFT_SHIFT);
-              bleKeyboard.press(keyMap["KEY_LEFT_CTRL"]);
-              keyMap.find("KEY_LEFT_CTRL");
+              //bleKeyboard.press(keyMap["KEY_LEFT_CTRL"]);
+              //keyMap.find("KEY_LEFT_CTRL");
               bleKeyboard.press(string);
               delay(1);
               bleKeyboard.releaseAll();
               Serial.println("press");
-            }
+            }*/
           }
           Serial.println("sent over ble");
         }
