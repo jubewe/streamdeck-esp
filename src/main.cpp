@@ -74,8 +74,7 @@ std::map<std::string, uint8_t> customKeyMap = {
     {"KEY_NUM_MINUS", KEY_NUM_MINUS},
     {"KEY_NUM_PLUS", KEY_NUM_PLUS},
     {"KEY_NUM_ENTER", KEY_NUM_ENTER},
-    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}
-};
+    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}};
 
 // settings
 bool setting_saveOldMenuPage = false;
@@ -184,7 +183,7 @@ class ServerCallbacks : public NimBLEServerCallbacks
   void onConnect(NimBLEServer *pServer, ble_gap_conn_desc *desc)
   {
     Serial.println("updateMTU to: " + String(NimBLEDevice::getMTU()));
-    //Serial.println("updateMTU to: " + String(pServer->getPeerMTU(desc->conn_handle)));
+    // Serial.println("updateMTU to: " + String(pServer->getPeerMTU(desc->conn_handle)));
     deviceConnected = true;
     Serial.print("Client address: ");
     // NimBLEDevice::stopAdvertising();
@@ -260,7 +259,7 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
         Serial.println(value);
         Serial.println(config);
         Serial.println(clipboard);
-        writeCharacteristic(configCharacteristic, "s," + id + "," + value + ",{{"+ config + "}}," + String(clipboard));
+        writeCharacteristic(configCharacteristic, "s," + id + "," + value + ",{{" + config + "}}," + String(clipboard));
       }
     }
   };
@@ -380,10 +379,10 @@ void setup()
   pinMode(ledPin, OUTPUT);
   ledcSetup(0, 5000, 8);
   ledcAttachPin(ledPin, 0);
-  config = !digitalRead(encoder2PinSwitch);
+  config = !digitalRead(encoder2PinSwitch) || !digitalRead(encoder1PinSwitch);
   if (config)
   {
-    //NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
+    // NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
     NimBLEDevice::init(DEVICE_NAME_CONFIG);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
     NimBLEDevice::setMTU(BLE_ATT_MTU_MAX);
@@ -517,8 +516,8 @@ void loop()
   if ((millis() - lastMillisBatteryRead) > batteryReadFreq)
   {
     batteryPercent = constrain(int(lipo.cellPercent()), 0, 99);
-    //Serial.println("battery level: " + String(batteryPercent) + "%");
-    //Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
+    // Serial.println("battery level: " + String(batteryPercent) + "%");
+    // Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
     Serial.println("updateMTU0 to: " + String(NimBLEDevice::getMTU()));
     bleKeyboard.setBatteryLevel(batteryPercent);
     lastMillisBatteryRead = millis();
@@ -750,37 +749,42 @@ void loop()
         {
           bool clipboard = preferences.getBool((String(ID) + "clipboard").c_str(), false);
           String config = preferences.getString((String(ID) + "config").c_str(), "");
-          if (clipboard)
+          if (state == HIGH && clipboard)
           {
             bleKeyboard.print(config);
-            
           }
           else
           {
-            int startPos = 0; // Starting position for searching
+            int startPos = 0;     // Starting position for searching
             int separatorPos = 0; // Position of the '+' separator
-            while (separatorPos >= 0) {
+            while (separatorPos >= 0)
+            {
               separatorPos = config.indexOf('+', startPos); // Find the next '+' separator
               String part;
-              if (separatorPos >= 0) { // If separator found
+              if (separatorPos >= 0)
+              {                                                  // If separator found
                 part = config.substring(startPos, separatorPos); // Extract the part between separators
-                startPos = separatorPos + 1; // Update starting position for the next search
-              } else { // If no more separators found
+                startPos = separatorPos + 1;                     // Update starting position for the next search
+              }
+              else
+              {                                    // If no more separators found
                 part = config.substring(startPos); // Extract the last part
               }
               if (state)
-            {
-              u_int8_t key = customKeyMap[part.c_str()];
-              if(key != 0){
-                bleKeyboard.press(key);
-              }else{
-                bleKeyboard.press(part[0]);
+              {
+                u_int8_t key = customKeyMap[part.c_str()];
+                if (key != 0)
+                {
+                  bleKeyboard.press(key);
+                }
+                else
+                {
+                  bleKeyboard.press(part[0]);
+                }
+                Serial.println("hold: " + part + "(" + String(key) + ")");
               }
-              Serial.println("hold: "+part + "("+String(key)+")");
             }
-            
-            }
-            if(!state)
+            if (!state)
             {
               bleKeyboard.releaseAll();
               Serial.println("release all");
