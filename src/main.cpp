@@ -5,10 +5,18 @@
 #include <Adafruit_MAX1704X.h>
 #include <BleKeyboard.h>
 #include <Preferences.h>
+#include <iostream>
+#include <map>
+#include <string>
 
 #define DEVICE_NAME "Streamdeck"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
 #define DEVICE_FIRMWARE "V1.3"
+
+
+std::map<std::string, MediaKeyReport> customMediaKeyMap = {
+  {"KEY_MEDIA_NEXT_TRACK",  {0U, 1U}},
+};
 
 std::map<std::string, uint8_t> customKeyMap = {
     {"KEY_LEFT_CTRL", KEY_LEFT_CTRL},
@@ -74,7 +82,11 @@ std::map<std::string, uint8_t> customKeyMap = {
     {"KEY_NUM_MINUS", KEY_NUM_MINUS},
     {"KEY_NUM_PLUS", KEY_NUM_PLUS},
     {"KEY_NUM_ENTER", KEY_NUM_ENTER},
-    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}};
+    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}
+};
+
+
+
 
 // settings
 bool setting_saveOldMenuPage = false;
@@ -772,15 +784,19 @@ void loop()
               }
               if (state)
               {
-                u_int8_t key = customKeyMap[part.c_str()];
-                if (key != 0)
-                {
-                  bleKeyboard.press(key);
-                }
-                else
-                {
-                  bleKeyboard.press(part[0]);
-                }
+                if(part.substring(0,9)=="KEY_MEDIA"){
+                  bleKeyboard.write(customMediaKeyMap[part.c_str()]);
+                }else{
+                  u_int8_t key = customKeyMap[part.c_str()];
+                  if (key != 0)
+                  {
+                    bleKeyboard.press(key);
+                  }
+                  else
+                  {
+                    bleKeyboard.press(part[0]);
+                  }
+                }              
                 Serial.println("hold: " + part + "(" + String(key) + ")");
               }
             }
