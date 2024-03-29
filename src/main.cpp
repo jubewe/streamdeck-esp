@@ -8,15 +8,77 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <unordered_map>
 
 #define DEVICE_NAME "Streamdeck"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
 #define DEVICE_FIRMWARE "V1.3"
 
 
-std::map<std::string, MediaKeyReport> customMediaKeyMap = {
-  {"KEY_MEDIA_NEXT_TRACK",  {0U, 1U}},
+struct MediaKeyWrapper { uint8_t value[2]; };
+
+MediaKeyWrapper KEY_MEDIA_NEXT_TRACK_WRAPPED = {1, 0};
+MediaKeyWrapper KEY_MEDIA_PREVIOUS_TRACK_WRAPPED = {2, 0};
+MediaKeyWrapper KEY_MEDIA_STOP_WRAPPED = {4, 0};
+MediaKeyWrapper KEY_MEDIA_PLAY_PAUSE_WRAPPED = {8, 0};
+MediaKeyWrapper KEY_MEDIA_MUTE_WRAPPED = {16, 0};
+MediaKeyWrapper KEY_MEDIA_VOLUME_UP_WRAPPED = {32, 0};
+MediaKeyWrapper KEY_MEDIA_VOLUME_DOWN_WRAPPED = {64, 0};
+MediaKeyWrapper KEY_MEDIA_WWW_HOME_WRAPPED = {128, 0};
+MediaKeyWrapper KEY_MEDIA_LOCAL_MACHINE_BROWSER_WRAPPED = {0, 1}; // Opens "My Computer" on Windows
+MediaKeyWrapper KEY_MEDIA_CALCULATOR_WRAPPED = {0, 2};
+MediaKeyWrapper KEY_MEDIA_WWW_BOOKMARKS_WRAPPED = {0, 4};
+MediaKeyWrapper KEY_MEDIA_WWW_SEARCH_WRAPPED = {0, 8};
+MediaKeyWrapper KEY_MEDIA_WWW_STOP_WRAPPED = {0, 16};
+MediaKeyWrapper KEY_MEDIA_WWW_BACK_WRAPPED = {0, 32};
+MediaKeyWrapper KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION_WRAPPED = {0, 64}; // Media Selection
+MediaKeyWrapper KEY_MEDIA_EMAIL_READER_WRAPPED = {0, 128};
+
+std::map<std::string, MediaKeyWrapper> customMediaKeyMap = {
+  {"KEY_MEDIA_NEXT_TRACK", KEY_MEDIA_NEXT_TRACK_WRAPPED},
+  {"KEY_MEDIA_PREVIOUS_TRACK", KEY_MEDIA_PREVIOUS_TRACK_WRAPPED},
+  {"KEY_MEDIA_STOP", KEY_MEDIA_STOP_WRAPPED},
+  {"KEY_MEDIA_PLAY_PAUSE", KEY_MEDIA_PLAY_PAUSE_WRAPPED},
+  {"KEY_MEDIA_MUTE", KEY_MEDIA_MUTE_WRAPPED},
+  {"KEY_MEDIA_VOLUME_UP", KEY_MEDIA_VOLUME_UP_WRAPPED},
+  {"KEY_MEDIA_VOLUME_DOWN", KEY_MEDIA_VOLUME_DOWN_WRAPPED},
+  {"KEY_MEDIA_WWW_HOME", KEY_MEDIA_WWW_HOME_WRAPPED},
+  {"KEY_MEDIA_LOCAL_MACHINE_BROWSER", KEY_MEDIA_LOCAL_MACHINE_BROWSER_WRAPPED},
+  {"KEY_MEDIA_CALCULATOR", KEY_MEDIA_CALCULATOR_WRAPPED},
+  {"KEY_MEDIA_WWW_BOOKMARKS", KEY_MEDIA_WWW_BOOKMARKS_WRAPPED},
+  {"KEY_MEDIA_WWW_SEARCH", KEY_MEDIA_WWW_SEARCH_WRAPPED},
+  {"KEY_MEDIA_WWW_STOP", KEY_MEDIA_WWW_STOP_WRAPPED},
+  {"KEY_MEDIA_WWW_BACK", KEY_MEDIA_WWW_BACK_WRAPPED},
+  {"KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION", KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION_WRAPPED},
+  {"KEY_MEDIA_EMAIL_READER", KEY_MEDIA_EMAIL_READER_WRAPPED}
 };
+
+//std::map<std::string, uint8_t[2]> customKeyMap2 = {
+//    {"KEY_LEFT_CTRL", test5},
+//};
+
+
+/*
+typedef uint8_t MediaKeyReport[2];
+
+const MediaKeyReport KEY_MEDIA_NEXT_TRACK = {1, 0};
+const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {2, 0};
+const MediaKeyReport KEY_MEDIA_STOP = {4, 0};
+const MediaKeyReport KEY_MEDIA_PLAY_PAUSE = {8, 0};
+const MediaKeyReport KEY_MEDIA_MUTE = {16, 0};
+const MediaKeyReport KEY_MEDIA_VOLUME_UP = {32, 0};
+const MediaKeyReport KEY_MEDIA_VOLUME_DOWN = {64, 0};
+const MediaKeyReport KEY_MEDIA_WWW_HOME = {128, 0};
+const MediaKeyReport KEY_MEDIA_LOCAL_MACHINE_BROWSER = {0, 1}; // Opens "My Computer" on Windows
+const MediaKeyReport KEY_MEDIA_CALCULATOR = {0, 2};
+const MediaKeyReport KEY_MEDIA_WWW_BOOKMARKS = {0, 4};
+const MediaKeyReport KEY_MEDIA_WWW_SEARCH = {0, 8};
+const MediaKeyReport KEY_MEDIA_WWW_STOP = {0, 16};
+const MediaKeyReport KEY_MEDIA_WWW_BACK = {0, 32};
+const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64}; // Media Selection
+const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128};
+*/
+
 
 std::map<std::string, uint8_t> customKeyMap = {
     {"KEY_LEFT_CTRL", KEY_LEFT_CTRL},
@@ -785,7 +847,10 @@ void loop()
               if (state)
               {
                 if(part.substring(0,9)=="KEY_MEDIA"){
-                  bleKeyboard.write(customMediaKeyMap[part.c_str()]);
+                  MediaKeyReport mediaKey = {0,0};
+                  mediaKey[0] = customMediaKeyMap[part.c_str()].value[0];
+                  mediaKey[1] = customMediaKeyMap[part.c_str()].value[1];
+                  bleKeyboard.write(mediaKey);
                 }else{
                   u_int8_t key = customKeyMap[part.c_str()];
                   if (key != 0)
@@ -797,7 +862,7 @@ void loop()
                     bleKeyboard.press(part[0]);
                   }
                 }              
-                Serial.println("hold: " + part + "(" + String(key) + ")");
+                Serial.println("hold: " + part);
               }
             }
             if (!state)

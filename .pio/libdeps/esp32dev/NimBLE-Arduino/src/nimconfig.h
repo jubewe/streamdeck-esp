@@ -69,7 +69,7 @@
  */
  // #define CONFIG_BT_NIMBLE_LOG_LEVEL 5
 
- /** @brief Un-comment to set the debug log messages level from the NimBLE CPP Wrapper.\n
+ /** @brief Un-comment to set the debug log messages level from the NimBLE CPP MediaKeyWrapper.\n
  *  Values: 0 = NONE, 1 = ERROR, 2 = WARNING, 3 = INFO, 4+ = DEBUG\n
  *  Uses approx. 32kB of flash memory.
  */

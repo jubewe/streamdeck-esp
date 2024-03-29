@@ -106,6 +106,7 @@ const uint8_t KEY_NUM_PERIOD = 0xEB;
 
 typedef uint8_t MediaKeyReport[2];
 
+/*
 const MediaKeyReport KEY_MEDIA_NEXT_TRACK = {1, 0};
 const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {2, 0};
 const MediaKeyReport KEY_MEDIA_STOP = {4, 0};
@@ -121,7 +122,9 @@ const MediaKeyReport KEY_MEDIA_WWW_SEARCH = {0, 8};
 const MediaKeyReport KEY_MEDIA_WWW_STOP = {0, 16};
 const MediaKeyReport KEY_MEDIA_WWW_BACK = {0, 32};
 const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64}; // Media Selection
-const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128};
+const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128};*/
+
+
 
 
 //  Low level key report: up to 6 keys and shift, ctrl etc at once
