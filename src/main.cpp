@@ -310,7 +310,7 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
         bool clipboard = pValue.substring(seperator4 + 3, pValue.length()) == "1";
         preferences.putString(id.c_str(), value);
         preferences.putString((String(id) + "config").c_str(), config);
-        preferences.putBool((id + "clipboard").c_str(), clipboard);
+        preferences.putBool((String(id) + "clipboard").c_str(), clipboard);
 
         Serial.print("new config: ");
         Serial.println(pValue);
@@ -326,7 +326,7 @@ class CharacteristicsCallback : public NimBLECharacteristicCallbacks
         String id = pValue.substring(seperator1 + 1, pValue.length());
         String value = preferences.getString(id.c_str(), "---");
         String config = preferences.getString((String(id) + "config").c_str(), "");
-        bool clipboard = preferences.getBool((id + "clipboard").c_str(), false);
+        bool clipboard = preferences.getBool((String(id) + "clipboard").c_str(), false);
         Serial.print("send config: ");
         Serial.println(pValue);
         Serial.println(id);
@@ -405,7 +405,7 @@ void drawPage()
   tft.drawCircle(DISPLAY_WIDTH - 48 - 3, DISPLAY_HEIGHT / 2, 14, TFT_LIGHTGREY);
 }
 
-void drawKeyString(char key, int id)
+void drawKeyString(int id)
 {
   tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 4, TFT_BLACK);
   String value = preferences.getString(String(id).c_str(), "---");
@@ -592,7 +592,6 @@ void loop()
     batteryPercent = constrain(int(lipo.cellPercent()), 0, 99);
     // Serial.println("battery level: " + String(batteryPercent) + "%");
     // Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
-    Serial.println("updateMTU0 to: " + String(NimBLEDevice::getMTU()));
     bleKeyboard.setBatteryLevel(batteryPercent);
     lastMillisBatteryRead = millis();
   }
@@ -782,14 +781,15 @@ void loop()
     bool state = !lastState[ID];
 
     lastState[ID] = state;
-    char string = 'a' + ID + 15 * page;
+
+    int id = ID + page * 15;
+
     Serial.print("Switch changed: " + String(ID) + " ");
     Serial.println("New state: " + String(state));
-    Serial.println("char:" + String(string));
 
     if (!menuMode && showKeyString && showKeyStringOld)
     {
-      drawKeyString(string, ID);
+      drawKeyString(id);
     }
     // else if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == LOW))
     // {
@@ -818,11 +818,11 @@ void loop()
         // }
       }
       else
-      {
+      {  
         if (!menuMode && !showKeyString)
         {
-          bool clipboard = preferences.getBool((String(ID) + "clipboard").c_str(), false);
-          String config = preferences.getString((String(ID) + "config").c_str(), "");
+          bool clipboard = preferences.getBool((String(id) + "clipboard").c_str(), false);
+          String config = preferences.getString((String(id) + "config").c_str(), "");
           if (state == HIGH && clipboard)
           {
             bleKeyboard.print(config);
