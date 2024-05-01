@@ -12,7 +12,7 @@
 
 #define DEVICE_NAME "Streamdeck"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
-#define DEVICE_FIRMWARE "V1.3"
+#define DEVICE_FIRMWARE "V1.4"
 
 struct MediaKeyWrapper
 {
