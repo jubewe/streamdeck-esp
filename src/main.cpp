@@ -14,8 +14,10 @@
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
 #define DEVICE_FIRMWARE "V1.3"
 
-
-struct MediaKeyWrapper { uint8_t value[2]; };
+struct MediaKeyWrapper
+{
+  uint8_t value[2];
+};
 
 MediaKeyWrapper KEY_MEDIA_NEXT_TRACK_WRAPPED = {1, 0};
 MediaKeyWrapper KEY_MEDIA_PREVIOUS_TRACK_WRAPPED = {2, 0};
@@ -35,28 +37,26 @@ MediaKeyWrapper KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION_WRAPPED = {0, 64}; // M
 MediaKeyWrapper KEY_MEDIA_EMAIL_READER_WRAPPED = {0, 128};
 
 std::map<std::string, MediaKeyWrapper> customMediaKeyMap = {
-  {"KEY_MEDIA_NEXT_TRACK", KEY_MEDIA_NEXT_TRACK_WRAPPED},
-  {"KEY_MEDIA_PREVIOUS_TRACK", KEY_MEDIA_PREVIOUS_TRACK_WRAPPED},
-  {"KEY_MEDIA_STOP", KEY_MEDIA_STOP_WRAPPED},
-  {"KEY_MEDIA_PLAY_PAUSE", KEY_MEDIA_PLAY_PAUSE_WRAPPED},
-  {"KEY_MEDIA_MUTE", KEY_MEDIA_MUTE_WRAPPED},
-  {"KEY_MEDIA_VOLUME_UP", KEY_MEDIA_VOLUME_UP_WRAPPED},
-  {"KEY_MEDIA_VOLUME_DOWN", KEY_MEDIA_VOLUME_DOWN_WRAPPED},
-  {"KEY_MEDIA_WWW_HOME", KEY_MEDIA_WWW_HOME_WRAPPED},
-  {"KEY_MEDIA_LOCAL_MACHINE_BROWSER", KEY_MEDIA_LOCAL_MACHINE_BROWSER_WRAPPED},
-  {"KEY_MEDIA_CALCULATOR", KEY_MEDIA_CALCULATOR_WRAPPED},
-  {"KEY_MEDIA_WWW_BOOKMARKS", KEY_MEDIA_WWW_BOOKMARKS_WRAPPED},
-  {"KEY_MEDIA_WWW_SEARCH", KEY_MEDIA_WWW_SEARCH_WRAPPED},
-  {"KEY_MEDIA_WWW_STOP", KEY_MEDIA_WWW_STOP_WRAPPED},
-  {"KEY_MEDIA_WWW_BACK", KEY_MEDIA_WWW_BACK_WRAPPED},
-  {"KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION", KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION_WRAPPED},
-  {"KEY_MEDIA_EMAIL_READER", KEY_MEDIA_EMAIL_READER_WRAPPED}
-};
+    {"KEY_MEDIA_NEXT_TRACK", KEY_MEDIA_NEXT_TRACK_WRAPPED},
+    {"KEY_MEDIA_PREVIOUS_TRACK", KEY_MEDIA_PREVIOUS_TRACK_WRAPPED},
+    {"KEY_MEDIA_STOP", KEY_MEDIA_STOP_WRAPPED},
+    {"KEY_MEDIA_PLAY_PAUSE", KEY_MEDIA_PLAY_PAUSE_WRAPPED},
+    {"KEY_MEDIA_MUTE", KEY_MEDIA_MUTE_WRAPPED},
+    {"KEY_MEDIA_VOLUME_UP", KEY_MEDIA_VOLUME_UP_WRAPPED},
+    {"KEY_MEDIA_VOLUME_DOWN", KEY_MEDIA_VOLUME_DOWN_WRAPPED},
+    {"KEY_MEDIA_WWW_HOME", KEY_MEDIA_WWW_HOME_WRAPPED},
+    {"KEY_MEDIA_LOCAL_MACHINE_BROWSER", KEY_MEDIA_LOCAL_MACHINE_BROWSER_WRAPPED},
+    {"KEY_MEDIA_CALCULATOR", KEY_MEDIA_CALCULATOR_WRAPPED},
+    {"KEY_MEDIA_WWW_BOOKMARKS", KEY_MEDIA_WWW_BOOKMARKS_WRAPPED},
+    {"KEY_MEDIA_WWW_SEARCH", KEY_MEDIA_WWW_SEARCH_WRAPPED},
+    {"KEY_MEDIA_WWW_STOP", KEY_MEDIA_WWW_STOP_WRAPPED},
+    {"KEY_MEDIA_WWW_BACK", KEY_MEDIA_WWW_BACK_WRAPPED},
+    {"KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION", KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION_WRAPPED},
+    {"KEY_MEDIA_EMAIL_READER", KEY_MEDIA_EMAIL_READER_WRAPPED}};
 
-//std::map<std::string, uint8_t[2]> customKeyMap2 = {
-//    {"KEY_LEFT_CTRL", test5},
-//};
-
+// std::map<std::string, uint8_t[2]> customKeyMap2 = {
+//     {"KEY_LEFT_CTRL", test5},
+// };
 
 /*
 typedef uint8_t MediaKeyReport[2];
@@ -78,7 +78,6 @@ const MediaKeyReport KEY_MEDIA_WWW_BACK = {0, 32};
 const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64}; // Media Selection
 const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128};
 */
-
 
 std::map<std::string, uint8_t> customKeyMap = {
     {"KEY_LEFT_CTRL", KEY_LEFT_CTRL},
@@ -144,11 +143,7 @@ std::map<std::string, uint8_t> customKeyMap = {
     {"KEY_NUM_MINUS", KEY_NUM_MINUS},
     {"KEY_NUM_PLUS", KEY_NUM_PLUS},
     {"KEY_NUM_ENTER", KEY_NUM_ENTER},
-    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}
-};
-
-
-
+    {"KEY_NUM_PERIOD", KEY_NUM_PERIOD}};
 
 // settings
 bool setting_saveOldMenuPage = false;
@@ -174,6 +169,8 @@ const int encoder1PinSwitch = 33;
 const int encoder2PinA = 26;
 const int encoder2PinB = 17;
 const int encoder2PinSwitch = 32;
+
+bool isFirstRun = true;
 
 int encoder1Pos = 0;
 int encoder1PinALast = LOW;
@@ -204,6 +201,9 @@ const int ledDim = 50;
 bool ledState;
 
 int lastState[numSwitches];
+int lastState2[numSwitches];
+int switchOnStates[numSwitches] = {64511, 57343, 65534, 65533, 65519, 65023, 61439, 32767, 65531, 65503, 65279, 63487, 49151, 65527, 65471};
+// int switchOnStates2[numSwitches] = {64511, 57279, 65278, 57343, 65263, 64959, 61375, 32703, 65531, 65247, 65215, 63423, 49087, 65527, 65215};
 
 int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6};
 
@@ -220,6 +220,8 @@ int getButtonIdFromPin(int buttonId)
     }
   }
 }
+
+int lastAction = 0;
 
 Adafruit_MCP23X17 mcp;
 
@@ -399,6 +401,9 @@ int page = 0;
 int pageMax = 2;
 int pageOld = 0;
 
+int startTime = millis();
+int expanderConnected;
+
 void drawPage()
 {
   tft.drawCentreString(String(page + 1), DISPLAY_WIDTH - 47 - 3, DISPLAY_HEIGHT / 2 - 10, 4);
@@ -496,6 +501,7 @@ void setup()
       ;
   }
   Serial.println("connected to expander");
+  expanderConnected = millis();
   if (!lipo.begin())
   {
     Serial.println("error while connecting to MAX17048");
@@ -509,10 +515,15 @@ void setup()
   for (int ID = 0; ID < 16; ID++)
   {
     mcp.pinMode(ID, INPUT_PULLUP);
+    delay(10);
     mcp.setupInterruptPin(ID, CHANGE);
+    delay(10);
   }
 
   memset(switchStates, false, sizeof(switchStates));
+  mcp.clearInterrupts();
+
+  // delay(1000);
 }
 
 int i = 0;
@@ -729,7 +740,9 @@ void loop()
         }
       }
       else
+      {
         encoder2Pos++;
+      }
     }
     else
     {
@@ -772,20 +785,42 @@ void loop()
     }
   }
 
-  if (digitalRead(INTPin) == LOW)
+  if (digitalRead(INTPin) == LOW && expanderConnected)
   {
+    lastAction = millis();
     int lastInterrupted = mcp.getLastInterruptPin();
     int ID = getButtonIdFromPin(mcp.getLastInterruptPin());
-    //      bool state = mcp.digitalRead(ID);
+    int currentState = mcp.getCapturedInterrupt();
+    int oldState = lastState2[ID];
+    bool isSchmarrn = currentState != 65535 && oldState != 65535;
 
     bool state = !lastState[ID];
 
+    // if (isSchmarrn)
+    // {
+    //   state = (currentState == switchOnStates2[ID]);
+    // }
+    // else
+    if (!isSchmarrn)
+    {
+      if (currentState == 65535)
+      {
+        state = 0;
+      }
+      else if (switchOnStates[ID] == currentState)
+      {
+        state = 1;
+      }
+    }
+
     lastState[ID] = state;
+    lastState2[ID] = currentState;
 
     int id = ID + page * 15;
 
     Serial.print("Switch changed: " + String(ID) + " ");
-    Serial.println("New state: " + String(state));
+    Serial.print("New state: " + String(state) + " ");
+    Serial.println("Current State: " + String(currentState) + " Old State: " + String(oldState));
 
     if (!menuMode && showKeyString && showKeyStringOld)
     {
@@ -818,7 +853,7 @@ void loop()
         // }
       }
       else
-      {  
+      {
         if (!menuMode && !showKeyString)
         {
           bool clipboard = preferences.getBool((String(id) + "clipboard").c_str(), false);
@@ -846,12 +881,15 @@ void loop()
               }
               if (state)
               {
-                if(part.substring(0,9)=="KEY_MEDIA"){
-                  MediaKeyReport mediaKey = {0,0};
+                if (part.substring(0, 9) == "KEY_MEDIA")
+                {
+                  MediaKeyReport mediaKey = {0, 0};
                   mediaKey[0] = customMediaKeyMap[part.c_str()].value[0];
                   mediaKey[1] = customMediaKeyMap[part.c_str()].value[1];
                   bleKeyboard.write(mediaKey);
-                }else{
+                }
+                else
+                {
                   u_int8_t key = customKeyMap[part.c_str()];
                   if (key != 0)
                   {
@@ -861,7 +899,7 @@ void loop()
                   {
                     bleKeyboard.press(part[0]);
                   }
-                }              
+                }
                 Serial.println("hold: " + part);
               }
             }
@@ -885,6 +923,8 @@ void loop()
             }*/
           }
           Serial.println("sent over ble");
+          if (clipboard)
+            delay(100);
         }
       }
     }
@@ -892,6 +932,17 @@ void loop()
     switchStates[ID] = !state;
     // writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
     mcp.clearInterrupts();
+  }
+  else
+  {
+    // if (lastAction != 0 && (millis() - lastAction) > 60000)
+    // {
+    //   Serial.println("No action in the last 5 minutes - going into deep sleep");
+    //   lastAction = 0;
+
+    //   bleKeyboard.end();
+    //   ESP.deepSleep(0);
+    // }
   }
 
   // Serial.println("Menu data: ");
