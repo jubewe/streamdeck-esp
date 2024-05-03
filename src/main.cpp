@@ -11,8 +11,9 @@
 #include <unordered_map>
 
 #define DEVICE_NAME "Streamdeck"
+#define STREAMDECK_NAME "Jus"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
-#define DEVICE_FIRMWARE "V1.4"
+#define DEVICE_FIRMWARE "V1.5"
 
 struct MediaKeyWrapper
 {
@@ -376,6 +377,8 @@ void drawBackground()
   tft.drawCentreString(DEVICE_NAME, (DISPLAY_WIDTH - 45 - 10) / 2, 10, 2);
   tft.drawCentreString(DEVICE_FIRMWARE, (DISPLAY_WIDTH - 45 - 10) / 2, 33 - 5, 1);
 
+  tft.drawCentreString(STREAMDECK_NAME, (DISPLAY_WIDTH - 45 - 10) / 2, 33 + 10, 1);
+
   if (deviceConnected)
   {
     tft.drawCentreString("  connected  ", (DISPLAY_WIDTH - 45 - 10) / 2, 65, 1);
@@ -526,6 +529,50 @@ void setup()
   // delay(1000);
 }
 
+void executePress(String config, bool release)
+{
+  int startPos = 0;     // Starting position for searching
+  int separatorPos = 0; // Position of the '+' separator
+  while (separatorPos >= 0)
+  {
+    separatorPos = config.indexOf('+', startPos); // Find the next '+' separator
+    String part;
+    if (separatorPos >= 0)
+    {                                                  // If separator found
+      part = config.substring(startPos, separatorPos); // Extract the part between separators
+      startPos = separatorPos + 1;                     // Update starting position for the next search
+    }
+    else
+    {                                    // If no more separators found
+      part = config.substring(startPos); // Extract the last part
+    }
+    if (part.substring(0, 9) == "KEY_MEDIA")
+    {
+      MediaKeyReport mediaKey = {0, 0};
+      mediaKey[0] = customMediaKeyMap[part.c_str()].value[0];
+      mediaKey[1] = customMediaKeyMap[part.c_str()].value[1];
+      bleKeyboard.write(mediaKey);
+    }
+    else
+    {
+      u_int8_t key = customKeyMap[part.c_str()];
+      if (key != 0)
+      {
+        bleKeyboard.press(key);
+      }
+      else
+      {
+        bleKeyboard.press(part[0]);
+      }
+    }
+
+    if(release) {
+      bleKeyboard.releaseAll();
+    }
+    Serial.println("hold: " + part);
+  }
+}
+
 int i = 0;
 unsigned long lastMillisBatteryRead;
 int batteryReadFreq = 1000;
@@ -612,6 +659,7 @@ void loop()
 
   if ((encoder1Switch == HIGH && encoder2Switch == HIGH) && (encoder1SwitchLast == LOW || encoder2SwitchLast == LOW))
   {
+    return;
     if (inSubmenu)
     {
       inSubmenu = false;
@@ -690,6 +738,9 @@ void loop()
       else
       {
         encoder1Pos++;
+        String id = "-1R";
+        String config = preferences.getString((String(id) + "config").c_str(), "");
+        executePress(config, true);
       }
     }
     else
@@ -708,6 +759,9 @@ void loop()
       else
       {
         encoder1Pos--;
+        String id = "-1L";
+        String config = preferences.getString((String(id) + "config").c_str(), "");
+        executePress(config, true);
       }
     }
     Serial.println(encoder1Pos);
@@ -742,6 +796,9 @@ void loop()
       else
       {
         encoder2Pos++;
+        String id = "-2R";
+        String config = preferences.getString((String(id) + "config").c_str(), "");
+        executePress(config, true);
       }
     }
     else
@@ -762,6 +819,9 @@ void loop()
       }
       else
         encoder2Pos--;
+        String id = "-2L";
+        String config = preferences.getString((String(id) + "config").c_str(), "");
+        executePress(config, true);
     }
     Serial.println(encoder2Pos);
     Serial.println("menu page " + String(menuPage));
@@ -864,46 +924,9 @@ void loop()
           }
           else
           {
-            int startPos = 0;     // Starting position for searching
-            int separatorPos = 0; // Position of the '+' separator
-            while (separatorPos >= 0)
-            {
-              separatorPos = config.indexOf('+', startPos); // Find the next '+' separator
-              String part;
-              if (separatorPos >= 0)
-              {                                                  // If separator found
-                part = config.substring(startPos, separatorPos); // Extract the part between separators
-                startPos = separatorPos + 1;                     // Update starting position for the next search
-              }
-              else
-              {                                    // If no more separators found
-                part = config.substring(startPos); // Extract the last part
-              }
-              if (state)
-              {
-                if (part.substring(0, 9) == "KEY_MEDIA")
-                {
-                  MediaKeyReport mediaKey = {0, 0};
-                  mediaKey[0] = customMediaKeyMap[part.c_str()].value[0];
-                  mediaKey[1] = customMediaKeyMap[part.c_str()].value[1];
-                  bleKeyboard.write(mediaKey);
-                }
-                else
-                {
-                  u_int8_t key = customKeyMap[part.c_str()];
-                  if (key != 0)
-                  {
-                    bleKeyboard.press(key);
-                  }
-                  else
-                  {
-                    bleKeyboard.press(part[0]);
-                  }
-                }
-                Serial.println("hold: " + part);
-              }
-            }
-            if (!state)
+            if (state)
+              executePress(config, false);
+            else
             {
               bleKeyboard.releaseAll();
               Serial.println("release all");
