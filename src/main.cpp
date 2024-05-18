@@ -211,7 +211,6 @@ int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6}
 const int encoder1Id = -1;
 const int encoder2Id = -2;
 
-
 int page = 0;
 int pageOld = 0;
 
@@ -627,6 +626,9 @@ void setup()
 
 void executePress(String config, bool release)
 {
+  if (!config || config == "")
+    return;
+
   int startPos = 0;     // Starting position for searching
   int separatorPos = 0; // Position of the '+' separator
   while (separatorPos >= 0)
@@ -815,7 +817,7 @@ void loop()
           }
           else
           {
-            page = pageMax;
+            page = 0;
           }
 
           encoderPosThresh = 0;
