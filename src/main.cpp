@@ -13,7 +13,7 @@
 #define DEVICE_NAME "Streamdeck"
 #define STREAMDECK_NAME "Jus"
 #define DEVICE_NAME_CONFIG "Streamdeck Configuration"
-#define DEVICE_FIRMWARE "V1.5"
+#define DEVICE_FIRMWARE "V1.6"
 
 struct MediaKeyWrapper
 {
@@ -211,6 +211,36 @@ int buttonMap[numSwitches] = {10, 13, 0, 1, 4, 9, 12, 15, 2, 5, 8, 11, 14, 3, 6}
 const int encoder1Id = -1;
 const int encoder2Id = -2;
 
+
+int page = 0;
+int pageOld = 0;
+
+int startTime = millis();
+int lastAction = 0;
+int expanderConnected;
+
+int i = 0;
+unsigned long lastMillisBatteryRead;
+int batteryReadFreq = 1000;
+
+bool closeMenu = false;
+bool menuOpening = false;
+
+#define menusNum 3
+#define pageMax 2
+#define menusSwitchThreshold 2
+#define pageSwitchThreshold 2
+bool showKeyString = false;
+bool showKeyStringOld = false;
+bool setKeyMode = false;
+bool menuMode = false;
+bool inSubmenu = false;
+bool showKeyDisabled = false;
+bool pageSwitchDisabled = false;
+int menuPage = 0;
+int encoderPosThresh = 0;
+int menuEncoderPosLast = 0;
+
 int getButtonIdFromPin(int buttonId)
 {
   for (int i = 0; i <= numSwitches; i++)
@@ -221,8 +251,6 @@ int getButtonIdFromPin(int buttonId)
     }
   }
 }
-
-int lastAction = 0;
 
 Adafruit_MCP23X17 mcp;
 
@@ -345,20 +373,19 @@ static CharacteristicsCallback characteristicsCallback;
 
 class DescriptorCallbacks : public NimBLEDescriptorCallbacks
 {
-  void onWrite(NimBLEDescriptor *pDescriptor){
-      // std::string dscVal = pDescriptor->getValue();
-      // Serial.print("Descriptor witten value:");
-      // Serial.println(dscVal.c_str());
+  void onWrite(NimBLEDescriptor *pDescriptor) {
+    // std::string dscVal = pDescriptor->getValue();
+    // Serial.print("Descriptor witten value:");
+    // Serial.println(dscVal.c_str());
   };
 
-  void onRead(NimBLEDescriptor *pDescriptor){
-      // Serial.print(pDescriptor->getUUID().toString().c_str());
-      // Serial.println(" Descriptor read");
+  void onRead(NimBLEDescriptor *pDescriptor) {
+    // Serial.print(pDescriptor->getUUID().toString().c_str());
+    // Serial.println(" Descriptor read");
   };
 };
 static DescriptorCallbacks dscCallbacks;
 
-/**/
 void statLED(bool state)
 {
   if (state)
@@ -371,9 +398,23 @@ void statLED(bool state)
   }
 }
 
+void drawEmpty()
+{
+  tft.fillRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 0, TFT_BLACK);
+  int BORDER_COLOR = TFT_WHITE;
+  if (deviceConnected)
+    BORDER_COLOR = TFT_YELLOW;
+  else
+    BORDER_COLOR = TFT_DARKGREY;
+
+  if (config)
+    BORDER_COLOR = TFT_GREEN;
+  tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, BORDER_COLOR);
+}
+
 void drawBackground()
 {
-  tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 2, TFT_BLACK);
+  drawEmpty();
   tft.drawCentreString(DEVICE_NAME, (DISPLAY_WIDTH - 45 - 10) / 2, 10, 2);
   tft.drawCentreString(DEVICE_FIRMWARE, (DISPLAY_WIDTH - 45 - 10) / 2, 33 - 5, 1);
 
@@ -382,17 +423,14 @@ void drawBackground()
   if (deviceConnected)
   {
     tft.drawCentreString("  connected  ", (DISPLAY_WIDTH - 45 - 10) / 2, 65, 1);
-    tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_SKYBLUE);
   }
   else
   {
     tft.drawCentreString("disconnected", (DISPLAY_WIDTH - 45 - 10) / 2, 65, 1);
-    tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_DARKGREY);
   }
   if (config)
   {
     tft.drawCentreString("(configuration)", (DISPLAY_WIDTH - 45 - 10) / 2, 50, 1);
-    tft.drawRoundRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, 10, TFT_GREEN);
   }
   else
   {
@@ -400,39 +438,48 @@ void drawBackground()
   }
 }
 
-int page = 0;
-int pageMax = 2;
-int pageOld = 0;
-
-int startTime = millis();
-int expanderConnected;
+void drawScreenSaver()
+{
+  drawEmpty();
+  // Draw dancing dino
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.setCursor(40, 20);
+  tft.println("  /\\_/\\");
+  tft.setCursor(40, 30);
+  tft.println(" ( o.o )");
+  tft.setCursor(40, 40);
+  tft.println("  > ^ <");
+  tft.setCursor(40, 50);
+  tft.println(" /  |  \\");
+  tft.setCursor(40, 60);
+  tft.println("/____|____\\");
+}
 
 void drawPage()
 {
-  tft.drawCentreString(String(page + 1), DISPLAY_WIDTH - 47 - 3, DISPLAY_HEIGHT / 2 - 10, 4);
-  tft.drawCircle(DISPLAY_WIDTH - 48 - 3, DISPLAY_HEIGHT / 2, 14, TFT_LIGHTGREY);
+  tft.drawCentreString(String(page + 1), DISPLAY_WIDTH - 47 - 3, (DISPLAY_HEIGHT / 2) - 10, 4);
+  tft.drawCircle(DISPLAY_WIDTH - 48 - 3, (DISPLAY_HEIGHT / 2), 14, TFT_LIGHTGREY);
 }
 
 void drawKeyString(int id)
 {
-  tft.fillRoundRect(2, 2, DISPLAY_WIDTH - 4, DISPLAY_HEIGHT - 4, 4, TFT_BLACK);
+  drawEmpty();
+  tft.drawCentreString("Key Info", (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2) - 30, 4);
   String value = preferences.getString(String(id).c_str(), "---");
-  tft.drawCentreString("key " + String(id) + " / page " + String(page + 1) + ":", (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 30, 2);
+  tft.drawCentreString("key " + String(id) + " / page " + String(page + 1), (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2), 2);
 
-  tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, DISPLAY_HEIGHT / 2 - 10, 2);
+  tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2) + 20, 2);
 }
 
 void drawBattery(int batteryPercent)
 {
   int color = TFT_GREEN;
-  if (batteryPercent <= 30)
-  {
+  if (batteryPercent <= 15)
     color = TFT_RED;
-  }
-  else if (batteryPercent <= 45)
-  {
+  else if (batteryPercent <= 25)
     color = TFT_ORANGE;
-  }
+
   img.setColorDepth(8);
   img.createSprite(38, DISPLAY_HEIGHT - 3);
   img.fillSprite(TFT_TRANSPARENT);
@@ -445,6 +492,55 @@ void drawBattery(int batteryPercent)
   img.drawCentreString(String(constrain(batteryPercent, 0, 99)) + "%", 40 - 10 - 8, 63, 2);
   img.pushSprite(DISPLAY_WIDTH - 41, -3, TFT_TRANSPARENT);
   img.deleteSprite();
+}
+
+String getSubmenuName(int page)
+{
+  switch (page)
+  {
+  case 0:
+  {
+    return "Restart Streamdeck";
+  }
+
+  case 1:
+  {
+    return "Test";
+  }
+
+  case menusNum - 1:
+  {
+    return "Exit menu";
+  }
+  }
+
+  return "";
+};
+
+void drawMenuPage()
+{
+  String value = getSubmenuName(menuPage);
+  String valueNext = getSubmenuName(menuPage + 1);
+  String valueLast = getSubmenuName(menuPage - 1);
+
+  tft.drawCentreString("Menu", (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2) - 30, 4);
+  if (value != "")
+    tft.drawCentreString(value, (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2) + 5, 2);
+
+  if (valueLast != "")
+    tft.drawCentreString(valueLast, (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2) - 5, 1);
+
+  if (valueNext != "")
+    tft.drawCentreString(valueNext, (DISPLAY_WIDTH) / 2, (DISPLAY_HEIGHT / 2) + 20, 1);
+
+  // Draw scrollbar
+  int scrollbarHeight = 60;
+  int scrollbarWidth = 5;
+  int scrollbarX = DISPLAY_WIDTH - scrollbarWidth - 7;
+  int scrollbarY = (DISPLAY_HEIGHT - scrollbarHeight) / 2;
+
+  tft.fillRect(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight, TFT_WHITE);
+  tft.fillRect(scrollbarX, scrollbarY + (menuPage * (scrollbarHeight / menusNum)), scrollbarWidth, scrollbarHeight / menusNum, TFT_BLUE);
 }
 
 void setup()
@@ -566,60 +662,19 @@ void executePress(String config, bool release)
       }
     }
 
-    if(release) {
+    if (release)
+    {
       bleKeyboard.releaseAll();
     }
     Serial.println("hold: " + part);
   }
 }
 
-int i = 0;
-unsigned long lastMillisBatteryRead;
-int batteryReadFreq = 1000;
-
-#define menusNum 3
-#define menusSwitchThreshold 4
-bool showKeyString = false;
-bool showKeyStringOld = false;
-bool setKeyMode = false;
-bool menuMode = false;
-bool inSubmenu = false;
-bool showKeyDisabled = false;
-bool pageSwitchDisabled = false;
-int menuPage = 0;
-int menuEncoderPos = 0;
-int menuEncoderPosLast = 0;
-
-// last menu page = exit menu
-
-bool closeMenu = false;
-
 void loop()
 {
-  if (menuMode)
-  {
-    showKeyString = false;
-  }
-  else
-  {
-    showKeyString = !digitalRead(encoder2PinSwitch);
-  }
-
-  if (showKeyString && !showKeyStringOld)
-  {
-    Serial.println("showKeyString press");
-    showKeyStringOld = showKeyString;
-  }
-  if (!showKeyString && showKeyStringOld)
-  {
-    Serial.println("showKeyString release");
-    showKeyStringOld = showKeyString;
-    refreshScreen = true;
-  }
-
   if (page != pageOld)
   {
-    drawPage();
+    refreshScreen = true;
     pageOld = page;
   }
 
@@ -632,34 +687,14 @@ void loop()
       refreshScreen = true;
     }
   }
-  if (batteryPercent != batteryPercentOld)
-  {
-    bleKeyboard.setBatteryLevel(batteryPercent);
-    drawBattery(batteryPercent);
-    batteryPercentOld = batteryPercent;
-  }
-  if (refreshScreen)
-  {
-    drawBackground();
-    drawBattery(batteryPercent);
-    drawPage();
-    refreshScreen = false;
-  }
-  if ((millis() - lastMillisBatteryRead) > batteryReadFreq)
-  {
-    batteryPercent = constrain(int(lipo.cellPercent()), 0, 99);
-    // Serial.println("battery level: " + String(batteryPercent) + "%");
-    // Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
-    bleKeyboard.setBatteryLevel(batteryPercent);
-    lastMillisBatteryRead = millis();
-  }
 
   encoder1Switch = !digitalRead(encoder1PinSwitch);
   encoder2Switch = !digitalRead(encoder2PinSwitch);
 
-  if ((encoder1Switch == HIGH && encoder2Switch == HIGH) && (encoder1SwitchLast == LOW || encoder2SwitchLast == LOW))
+  if (!menuOpening && (encoder1Switch == HIGH && encoder2Switch == HIGH) && (encoder1SwitchLast == LOW || encoder2SwitchLast == LOW))
   {
-    return;
+    refreshScreen = true;
+    // return;
     if (inSubmenu)
     {
       inSubmenu = false;
@@ -667,41 +702,52 @@ void loop()
     else
     {
       menuMode = !menuMode;
+      if (menuMode)
+        menuOpening = true;
       inSubmenu = false;
       if (!setting_saveOldMenuPage)
       {
         menuPage = 0;
         menuEncoderPosLast = 0;
       }
-      showKeyString = false;
+
       Serial.print("Menu ");
       Serial.println(menuMode ? "show" : "hide");
     }
   }
-  else if (menuMode && !inSubmenu && encoder1SwitchLast == LOW && encoder2SwitchLast == LOW && encoder2Switch == HIGH)
+  else if (!menuOpening && menuMode && !inSubmenu && encoder1SwitchLast == LOW && encoder2SwitchLast == LOW && encoder2Switch == HIGH)
   {
     inSubmenu = true;
+    refreshScreen = true;
 
     switch (menuPage)
     {
+    case 0:
+    {
+      // Restart BLEKeyboard
+
+      ESP.restart();
+
+      Serial.println("Menu: Restart Streamdeck");
+
+      closeMenu = true;
+
+      break;
+    }
+
     case menusNum - 1:
     {
       closeMenu = true;
-    }
-    }
-  }
 
-  if (closeMenu)
-  {
-    menuMode = false;
-    inSubmenu = false;
-    if (!setting_saveOldMenuPage)
+      break;
+    }
+
+    default:
     {
-      menuPage = 0;
-      menuEncoderPosLast = 0;
+      closeMenu = true;
+      break;
     }
-
-    closeMenu = false;
+    }
   }
 
   if (encoder1Switch != encoder1SwitchLast)
@@ -719,20 +765,60 @@ void loop()
     encoder2SwitchLast = encoder2Switch;
   }
 
+  if (menuMode || closeMenu || menuOpening)
+  {
+    showKeyString = false;
+  }
+  else
+  {
+    showKeyString = encoder2Switch;
+
+    if (showKeyString && !showKeyStringOld)
+    {
+      Serial.println("showKeyString press");
+      showKeyStringOld = showKeyString;
+    }
+    else if (!showKeyString && showKeyStringOld)
+    {
+      Serial.println("showKeyString release");
+      showKeyStringOld = showKeyString;
+      refreshScreen = true;
+    }
+  }
+
+  if (menuOpening)
+  {
+    if (encoder1Switch == LOW && encoder2Switch == LOW)
+      menuOpening = false;
+  }
+
   encoder1PinANow = digitalRead(encoder1PinA);
   if ((encoder1PinALast == HIGH) && (encoder1PinANow == LOW))
   {
+    if (menuMode)
+      return;
+
     if (digitalRead(encoder1PinB) == HIGH)
     {
       if (encoder1Switch)
       {
-        if (page < pageMax)
-        {
-          page++;
-        }
+        if (encoderPosThresh < 0)
+          encoderPosThresh = 0;
         else
+          encoderPosThresh++;
+
+        if (encoderPosThresh >= pageSwitchThreshold)
         {
-          page = 0;
+          if (page < pageMax)
+          {
+            page++;
+          }
+          else
+          {
+            page = pageMax;
+          }
+
+          encoderPosThresh = 0;
         }
       }
       else
@@ -747,13 +833,23 @@ void loop()
     {
       if (encoder1Switch)
       {
-        if (page > 0)
-        {
-          page--;
-        }
+        if (encoderPosThresh > 0)
+          encoderPosThresh = pageMax;
         else
+          encoderPosThresh--;
+
+        if (encoderPosThresh <= -pageSwitchThreshold)
         {
-          page = pageMax;
+          if (page > 0)
+          {
+            page--;
+          }
+          else
+          {
+            page = pageMax;
+          }
+
+          encoderPosThresh = 0;
         }
       }
       else
@@ -768,9 +864,6 @@ void loop()
     // writeCharacteristic(encoder1Characteristic, String(encoder1Pos));
   }
 
-  if ((encoder1PinANow == HIGH))
-  {
-  }
   encoder1PinALast = encoder1PinANow;
 
   encoder2PinANow = digitalRead(encoder2PinA);
@@ -782,15 +875,26 @@ void loop()
       {
         if (!inSubmenu)
         {
-          if (menuEncoderPos < 0)
-            menuEncoderPos = 0;
-          menuEncoderPos++;
-          if ((menuPage < menusNum - 1) && menuEncoderPos >= menusSwitchThreshold)
+          refreshScreen = true;
+
+          if (encoderPosThresh < 0)
+            encoderPosThresh = 0;
+          encoderPosThresh++;
+
+          if ((menuPage < menusNum - 1) && encoderPosThresh >= menusSwitchThreshold)
           {
             menuPage++;
-            menuEncoderPos = 0;
+            encoderPosThresh = 0;
           }
-          menuEncoderPosLast++;
+          else if (menuPage >= menusNum - 1 && encoderPosThresh >= menusSwitchThreshold)
+          {
+            menuPage = 0;
+            encoderPosThresh = 0;
+          }
+          else
+          {
+            refreshScreen = false;
+          }
         }
       }
       else
@@ -807,21 +911,36 @@ void loop()
       {
         if (!inSubmenu)
         {
-          if (menuEncoderPos > 0)
-            menuEncoderPos = 0;
-          menuEncoderPos--;
-          if (menuPage > 0 && menuEncoderPos <= -menusSwitchThreshold)
+          refreshScreen = true;
+
+          if (encoderPosThresh > 0)
+            encoderPosThresh = 0;
+          else
+            encoderPosThresh--;
+
+          if (menuPage > 0 && encoderPosThresh <= -menusSwitchThreshold)
           {
             menuPage--;
-            menuEncoderPos = 0;
+            encoderPosThresh = 0;
+          }
+          else if (menuPage <= 0 && encoderPosThresh <= -menusSwitchThreshold)
+          {
+            menuPage = menusNum - 1;
+            encoderPosThresh = 0;
+          }
+          else
+          {
+            refreshScreen = false;
           }
         }
       }
       else
+      {
         encoder2Pos--;
         String id = "-2L";
         String config = preferences.getString((String(id) + "config").c_str(), "");
         executePress(config, true);
+      }
     }
     Serial.println(encoder2Pos);
     Serial.println("menu page " + String(menuPage));
@@ -829,24 +948,9 @@ void loop()
   }
   encoder2PinALast = encoder2PinANow;
 
-  if (menuMode)
+  if (digitalRead(INTPin) == LOW && expanderConnected && !(menuMode || inSubmenu || closeMenu))
   {
-    if (inSubmenu)
-    {
-      switch (menuPage)
-      {
-      case menusNum - 1:
-      {
-        // display exit
 
-        break;
-      }
-      }
-    }
-  }
-
-  if (digitalRead(INTPin) == LOW && expanderConnected)
-  {
     lastAction = millis();
     int lastInterrupted = mcp.getLastInterruptPin();
     int ID = getButtonIdFromPin(mcp.getLastInterruptPin());
@@ -885,7 +989,13 @@ void loop()
     if (!menuMode && showKeyString && showKeyStringOld)
     {
       drawKeyString(id);
+      return;
     }
+    else if (menuMode)
+    {
+      drawMenuPage();
+    }
+
     // else if (((encoder1Switch == HIGH) || (encoder1SwitchLast == HIGH)) && (state == LOW))
     // {
     // }
@@ -952,9 +1062,10 @@ void loop()
       }
     }
 
+    if (state != switchStates[ID])
+      mcp.clearInterrupts();
     switchStates[ID] = !state;
     // writeCharacteristic(keyPressCharacteristic, String(String(ID) + ";" + String(state)));
-    mcp.clearInterrupts();
   }
   else
   {
@@ -990,5 +1101,56 @@ void loop()
       statLED(ledState);
       lastMillisLED = millis();
     }
+  }
+
+  if (batteryPercent != batteryPercentOld)
+  {
+    bleKeyboard.setBatteryLevel(batteryPercent);
+    drawBattery(batteryPercent);
+    batteryPercentOld = batteryPercent;
+  }
+
+  if (closeMenu)
+  {
+    refreshScreen = true;
+    menuMode = false;
+    inSubmenu = false;
+    if (!setting_saveOldMenuPage)
+    {
+      menuPage = 0;
+      menuEncoderPosLast = 0;
+    }
+
+    closeMenu = false;
+  }
+
+  if ((millis() - lastMillisBatteryRead) > batteryReadFreq)
+  {
+    batteryPercent = constrain(int(lipo.cellPercent()), 0, 99);
+    // Serial.println("battery level: " + String(batteryPercent) + "%");
+    // Serial.println("battery voltage: " + String(lipo.cellVoltage()) + "V");
+    bleKeyboard.setBatteryLevel(batteryPercent);
+    lastMillisBatteryRead = millis();
+  }
+
+  // if (millis() - lastAction > 3000)
+  // {
+  //   drawScreenSaver();
+  // }
+
+  if (refreshScreen)
+  {
+    drawEmpty();
+    if (menuMode)
+    {
+      drawMenuPage();
+    }
+    else
+    {
+      drawBackground();
+      drawBattery(batteryPercent);
+      drawPage();
+    }
+    refreshScreen = false;
   }
 }
